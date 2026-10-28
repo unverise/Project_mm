@@ -1,0 +1,18 @@
+ccflags-y += \
+	-I$(srctree)include/ \
+	-I$(srctree)includelinux/ \
+	-I$(srctree)mm/ \
+	-I$(srctree)/ \
+	-I$(DEVICE_MODULES_PATH)/drivers/misc/mediatek/sched/ \
+	-I$(srctree)/../kernel-6.1/kernel/ \
+
+
+subdir-ccflags-y += \
+	-I$(srctree)include/ \
+	-I$(srctree)includelinux/ \
+	-I$(srctree)mm/ \
+	-I$(srctree)/ \
+
+obj-m += shrink_slabd.o
+
+shrink_slabd-y += async_reclaim_slabd.o

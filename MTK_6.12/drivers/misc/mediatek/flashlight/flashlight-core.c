@@ -1,0 +1,2724 @@
+// SPDX-License-Identifier: GPL-2.0
+/*
+ * Copyright (c) 2019 MediaTek Inc.
+ */
+
+#define pr_fmt(fmt) KBUILD_MODNAME ": %s: " fmt, __func__
+
+#include <linux/types.h>
+#include <linux/init.h>
+#include <linux/module.h>
+#include <linux/fs.h>
+#include <linux/device.h>
+#include <linux/platform_device.h>
+#include <linux/cdev.h>
+#include <linux/uaccess.h>
+#include <linux/mutex.h>
+#include <linux/of.h>
+#include <linux/list.h>
+#include <linux/errno.h>
+#include <linux/slab.h>
+#include <linux/string.h>
+#include <linux/thermal.h>
+
+#ifdef CONFIG_COMPAT
+#include <linux/compat.h>
+#endif
+
+#include "flashlight-core.h"
+
+#ifdef CONFIG_MTK_FLASHLIGHT_PT
+#include "mtk_battery_oc_throttling.h"
+#include "mtk_low_battery_throttling.h"
+#include "mtk_bp_thl.h"
+#endif
+
+#ifdef CONFIG_MTK_FLASHLIGHT_DLPT
+#include "mtk_pbm.h" /* DLPT */
+#endif
+//ITD: Modify Flashlight Drv By Jesse 220405 Start
+#include "tran_flash_custom.h"
+static char *envp[2];
+static struct device *g_device[FLASHLIGHT_TYPE_MAX];
+int sysfs_debug = 0;
+int skip_main2_clk = 0;
+//ITD:modify for tele flash by yingfei.li 20240313 start
+unsigned int g_sysfs_strobe_level[3] = {0,0,0};
+unsigned int g_sysfs_inited[3] = {0,0,0};
+//ITD:modify for tele flash by yingfei.li 20240313 end
+EXPORT_SYMBOL(g_sysfs_strobe_level);
+EXPORT_SYMBOL(g_sysfs_inited);
+#ifndef CONFIG_FLASHLIGHT_NOTUSE_TEMPER
+#define CONFIG_TRAN_FLASHLIGHT_THERMAL_CONTROL
+#endif
+#ifdef CONFIG_TRAN_FLASHLIGHT_THERMAL_CONTROL
+#include <linux/hrtimer.h>
+#include <linux/ktime.h>
+#include "tc_misc_intf.h"
+#endif
+//ITD: Modify Flashlight Drv By Jesse 220405 end
+//ITD: add flash call by yingji.wang 20230110 start
+static int first_flash = 0;
+static int temp_flash2 = 0;
+static int led_flag = 0;
+//int flash_call_current[11]={50,70,90,110,130,150,130,110,90,70,50};
+static const int flash_call_current2[5]={5,9,13,17,21};
+static int fl_set_current(struct flashlight_dev *fdev, int duty_current);
+//ITD: add flash call by yingji.wang 20230110 end
+
+/******************************************************************************
+ * Definition
+ *****************************************************************************/
+static DEFINE_MUTEX(fl_mutex);
+LIST_HEAD(flashlight_list);
+
+/* duty current */
+static struct flashlight_arg duty_current_arg;
+
+/* power variables */
+#ifdef CONFIG_MTK_FLASHLIGHT_PT
+static int pt_low_vol = LOW_BATTERY_LEVEL_0;
+static int pt_low_bat = BATTERY_PERCENT_LEVEL_0;
+static int pt_over_cur = BATTERY_OC_LEVEL_0;
+
+static int pt_low_bat_level = LOW_BATTERY_LEVEL_2;
+static int pt_bat_pc_level = BATTERY_PERCENT_LEVEL_1;
+static int pt_bat_oc_level = BATTERY_OC_LEVEL_1;
+
+#ifdef CONFIG_MTK_FLASHLIGHT_PT_STRICT
+static int pt_strict = 1;
+#else
+static int pt_strict; /* always be zero in C standard */
+#endif
+
+static int pt_is_low(int pt_low_vol, int pt_low_bat, int pt_over_cur);
+#endif
+//ITD: Modify Flashlight Drv By renzhi.li 220622 start
+static int tran_vdcall_flag = 0;
+//ITD: Modify Flashlight Drv By renzhi.li 220622 end
+//ITD:add flashlight debug switch by renzhi.li 2023/05/17 start
+int debug_mask = 0;
+EXPORT_SYMBOL(debug_mask);
+//ITD:add flashlight debug switch by renzhi.li 2023/05/17 end
+/******************************************************************************
+ * Flashlight operations
+ *****************************************************************************/
+static int fl_set_level(struct flashlight_dev *fdev, int level)
+{
+	struct flashlight_dev_arg fl_dev_arg;
+
+	if (!fdev || !fdev->ops) {
+		pr_info("Failed with no flashlight ops\n");
+		return -EINVAL;
+	}
+
+	/* if pt is low */
+#ifdef CONFIG_MTK_FLASHLIGHT_PT
+	if (pt_is_low(pt_low_vol, pt_low_bat, pt_over_cur))
+		if (fdev->low_pt_level >= 0 && level > fdev->low_pt_level) {
+			level = fdev->low_pt_level;
+			pr_info("Set level to (%d) since pt(%d,%d,%d), pt strict(%d)\n",
+					level, pt_low_vol, pt_low_bat,
+					pt_over_cur, pt_strict);
+		}
+#endif
+
+	/* ioctl */
+	fl_dev_arg.channel = fdev->dev_id.channel;
+	fl_dev_arg.arg = level;
+	if (fdev->ops->flashlight_ioctl(FLASH_IOC_SET_DUTY,
+				(unsigned long)&fl_dev_arg)) {
+		pr_info("Failed to set level\n");
+		return -EFAULT;
+	}
+
+	/* update device status */
+	fdev->level = level;
+
+	return 0;
+}
+
+static int fl_enable(struct flashlight_dev *fdev, int enable)
+{
+	struct flashlight_dev_arg fl_dev_arg;
+
+	if (!fdev || !fdev->ops) {
+		pr_info("Failed with no flashlight ops\n");
+		return -EINVAL;
+	}
+
+	/* consider pt status */
+#ifdef CONFIG_MTK_FLASHLIGHT_DLPT
+	kicker_pbm_by_flash(enable);
+#endif
+#ifdef CONFIG_MTK_FLASHLIGHT_PT
+	if (pt_is_low(pt_low_vol, pt_low_bat, pt_over_cur) == 2)
+		if (enable) {
+			enable = 0;
+			pr_info("Failed to enable since pt(%d,%d,%d), pt strict(%d)\n",
+					pt_low_vol, pt_low_bat,
+					pt_over_cur, pt_strict);
+		}
+#endif
+
+	if (fdev->sw_disable_status == FLASHLIGHT_SW_DISABLE_ON) {
+		pr_info("Sw disable on\n");
+		return 0;
+	}
+
+	/* ioctl */
+	fl_dev_arg.channel = fdev->dev_id.channel;
+	fl_dev_arg.arg = enable;
+	if (fdev->ops->flashlight_ioctl(FLASH_IOC_SET_ONOFF,
+				(unsigned long)&fl_dev_arg)) {
+		pr_info("Failed to set on/off\n");
+		return -EFAULT;
+	}
+
+	/* update device status */
+	fdev->enable = enable;
+
+	return 0;
+}
+
+/* verify function */
+int flashlight_verify_type_index(int type_index)
+{
+	if (type_index < 0 || type_index >= FLASHLIGHT_TYPE_MAX) {
+		pr_info("type index (%d) is not valid\n", type_index);
+		return -1;
+	}
+	return 0;
+}
+EXPORT_SYMBOL(flashlight_verify_type_index);
+
+int flashlight_verify_ct_index(int ct_index)
+{
+	if (ct_index < 0 || ct_index >= FLASHLIGHT_CT_MAX) {
+		pr_info("ct index (%d) is not valid\n", ct_index);
+		return -1;
+	}
+	return 0;
+}
+EXPORT_SYMBOL(flashlight_verify_ct_index);
+
+int flashlight_verify_part_index(int part_index)
+{
+	if (part_index < 0 || part_index >= FLASHLIGHT_PART_MAX) {
+		pr_info("part index (%d) is not valid\n", part_index);
+		return -1;
+	}
+	return 0;
+}
+EXPORT_SYMBOL(flashlight_verify_part_index);
+
+int flashlight_verify_index(int type_index, int ct_index, int part_index)
+{
+	if (flashlight_verify_type_index(type_index) ||
+			flashlight_verify_ct_index(ct_index) ||
+			flashlight_verify_part_index(part_index))
+		return -1;
+	return 0;
+}
+EXPORT_SYMBOL(flashlight_verify_index);
+
+static int flashlight_verify_arg(struct flashlight_arg fl_arg)
+{
+	if (flashlight_verify_index(fl_arg.type, fl_arg.ct, fl_arg.part))
+		return -1;
+	if (fl_arg.level < -1 || fl_arg.level > FLASHLIGHT_ARG_LEVEL_MAX) {
+		pr_info("level (%d) is not valid\n", fl_arg.level);
+		return -1;
+	}
+	if (fl_arg.dur < 0 || fl_arg.dur > FLASHLIGHT_ARG_DUR_MAX) {
+		pr_info("duration (%d) is not valid\n", fl_arg.dur);
+		return -1;
+	}
+
+	return 0;
+}
+
+/* get id */
+int flashlight_get_type_id(int type_index)
+{
+	if (flashlight_verify_type_index(type_index)) {
+		pr_info("type index (%d) is not valid\n", type_index);
+		return -1;
+	}
+
+	return type_index + 1;
+}
+EXPORT_SYMBOL(flashlight_get_type_id);
+
+int flashlight_get_ct_id(int ct_index)
+{
+	if (flashlight_verify_ct_index(ct_index)) {
+		pr_info("color temperature index (%d) is not valid\n",
+			ct_index);
+		return -1;
+	}
+
+	return ct_index + 1;
+}
+EXPORT_SYMBOL(flashlight_get_ct_id);
+
+int flashlight_get_part_id(int part_index)
+{
+	if (flashlight_verify_part_index(part_index)) {
+		pr_info("part (%d) is not valid\n", part_index);
+		return -1;
+	}
+
+	return part_index + 1;
+}
+EXPORT_SYMBOL(flashlight_get_part_id);
+
+/* get index */
+int flashlight_get_type_index(int type_id)
+{
+	if (type_id < 1 || type_id > FLASHLIGHT_TYPE_MAX) {
+		pr_info("type id (%d) is not valid\n", type_id);
+		return -1;
+	}
+
+	return type_id - 1;
+}
+EXPORT_SYMBOL(flashlight_get_type_index);
+
+int flashlight_get_ct_index(int ct_id)
+{
+	if (ct_id < 1 || ct_id > FLASHLIGHT_CT_MAX) {
+		pr_info("color temperature id (%d) is not valid\n", ct_id);
+		return -1;
+	}
+
+	return ct_id - 1;
+}
+EXPORT_SYMBOL(flashlight_get_ct_index);
+
+int flashlight_get_part_index(int part_id)
+{
+	if (part_id < 1 || part_id > FLASHLIGHT_PART_MAX) {
+		pr_info("part id (%d) is not valid\n", part_id);
+		return -1;
+	}
+
+	return part_id - 1;
+}
+EXPORT_SYMBOL(flashlight_get_part_index);
+
+
+/******************************************************************************
+ * Flashlight devices
+ *****************************************************************************/
+/* find device */
+static struct flashlight_dev *flashlight_find_dev_by_full_index(
+		const int type, const int ct, const int part)
+{
+	struct flashlight_dev *fdev;
+
+	/* return the first flashlight device */
+	list_for_each_entry(fdev, &flashlight_list, node) {
+		if (fdev->dev_id.type == type &&
+				fdev->dev_id.ct == ct &&
+				fdev->dev_id.part == part)
+			return fdev;
+	}
+
+	return NULL;
+}
+//ITD:modify for tele flash by yingfei.li 20240313 start
+static struct flashlight_dev *flashlight_find_dev_by_channel(const int type, const int ct, const int channel)
+{
+	struct flashlight_dev *fdev;
+
+	/* return the first flashlight device */
+	list_for_each_entry(fdev, &flashlight_list, node) {
+		if (fdev->dev_id.type == type &&
+				fdev->dev_id.ct == ct &&
+				fdev->dev_id.channel == channel)
+			return fdev;
+	}
+
+	return NULL;
+}
+//ITD:modify for tele flash by yingfei.li 20240313 end
+static struct flashlight_dev *flashlight_find_dev_by_index(
+		const int type, const int ct)
+{
+	struct flashlight_dev *fdev;
+
+	/* return the first flashlight device */
+	list_for_each_entry(fdev, &flashlight_list, node) {
+		if (fdev->dev_id.type == type && fdev->dev_id.ct == ct)
+			return fdev;
+	}
+
+	return NULL;
+}
+
+static struct flashlight_dev *flashlight_find_dev_by_device_id(
+		const struct flashlight_device_id *dev_id)
+{
+	struct flashlight_dev *fdev;
+
+	if (!dev_id)
+		return NULL;
+
+	/* return the first flashlight device */
+	list_for_each_entry(fdev, &flashlight_list, node) {
+		if (fdev->dev_id.type == dev_id->type &&
+				fdev->dev_id.ct == dev_id->ct &&
+				fdev->dev_id.part == dev_id->part)
+			return fdev;
+	}
+
+	return NULL;
+}
+
+/*
+ * Register devices
+ *
+ * Please DO NOT register flashlight device driver,
+ * until success to probe hardware.
+ */
+int flashlight_dev_register(
+		const char *name, struct flashlight_operations *dev_ops)
+{
+	struct flashlight_dev *fdev;
+	int type_index, ct_index, part_index;
+	int i;
+
+	for (i = 0; i < flashlight_device_num; i++) {
+		if (!strncmp(name, flashlight_id[i].name,
+					FLASHLIGHT_NAME_SIZE)) {
+			type_index = flashlight_id[i].type;
+			ct_index = flashlight_id[i].ct;
+			part_index = flashlight_id[i].part;
+
+			if (flashlight_verify_index(
+						type_index,
+						ct_index,
+						part_index)) {
+				pr_info("Failed to register device (%s)\n",
+						flashlight_id[i].name);
+				continue;
+			}
+
+			pr_info("%s %d %d %d\n", flashlight_id[i].name,
+					type_index, ct_index, part_index);
+
+			mutex_lock(&fl_mutex);
+			fdev = kzalloc(sizeof(*fdev), GFP_KERNEL);
+			if (!fdev) {
+				mutex_unlock(&fl_mutex);
+				return -ENOMEM;
+			}
+			fdev->ops = dev_ops;
+			fdev->dev_id = flashlight_id[i];
+			fdev->low_pt_level = -1;
+			fdev->charger_status = FLASHLIGHT_CHARGER_READY;
+			fdev->torch_status = FLASHLIGHT_TORCH_OFF;
+			fdev->cur_mW = 0;
+			list_add_tail(&fdev->node, &flashlight_list);
+			mutex_unlock(&fl_mutex);
+		}
+	}
+
+	return 0;
+}
+EXPORT_SYMBOL(flashlight_dev_register);
+
+int flashlight_dev_unregister(const char *name)
+{
+	struct flashlight_dev *fdev;
+	int type_index, ct_index, part_index;
+	int i;
+
+	for (i = 0; i < flashlight_device_num; i++) {
+		if (!strncmp(name, flashlight_id[i].name,
+					FLASHLIGHT_NAME_SIZE)) {
+			type_index = flashlight_id[i].type;
+			ct_index = flashlight_id[i].ct;
+			part_index = flashlight_id[i].part;
+
+			if (flashlight_verify_index(
+						type_index,
+						ct_index,
+						part_index)) {
+				pr_info("Failed to unregister device (%s)\n",
+						flashlight_id[i].name);
+				continue;
+			}
+
+			pr_info("%s %d %d %d\n", flashlight_id[i].name,
+					type_index, ct_index, part_index);
+
+			mutex_lock(&fl_mutex);
+			fdev = flashlight_find_dev_by_device_id(
+					&flashlight_id[i]);
+			if (fdev) {
+				list_del(&fdev->node);
+				kfree(fdev);
+			}
+			mutex_unlock(&fl_mutex);
+		}
+	}
+
+	return 0;
+}
+EXPORT_SYMBOL(flashlight_dev_unregister);
+
+/*
+ * Register devices
+ *
+ * Please DO NOT register flashlight device driver,
+ * until success to probe hardware.
+ */
+int flashlight_dev_register_by_device_id(
+		struct flashlight_device_id *dev_id,
+		struct flashlight_operations *dev_ops)
+{
+	struct flashlight_dev *fdev;
+
+	if (!dev_id || !dev_ops)
+		return -EINVAL;
+
+	if (flashlight_verify_index(dev_id->type, dev_id->ct, dev_id->part)) {
+		pr_info("Failed to register device (%d,%d,%d)\n",
+				dev_id->type, dev_id->ct, dev_id->part);
+		return -EINVAL;
+	}
+
+	pr_info("Register device (%d,%d,%d)\n",
+			dev_id->type, dev_id->ct, dev_id->part);
+
+	mutex_lock(&fl_mutex);
+	fdev = kzalloc(sizeof(*fdev), GFP_KERNEL);
+	if (!fdev) {
+		mutex_unlock(&fl_mutex);
+		return -ENOMEM;
+	}
+	fdev->ops = dev_ops;
+	fdev->dev_id = *dev_id;
+	fdev->low_pt_level = -1;
+	fdev->charger_status = FLASHLIGHT_CHARGER_READY;
+	fdev->torch_status = FLASHLIGHT_TORCH_OFF;
+	fdev->cur_mW = 0;
+	list_add_tail(&fdev->node, &flashlight_list);
+	mutex_unlock(&fl_mutex);
+
+	return 0;
+}
+EXPORT_SYMBOL(flashlight_dev_register_by_device_id);
+
+int flashlight_dev_unregister_by_device_id(struct flashlight_device_id *dev_id)
+{
+	struct flashlight_dev *fdev;
+
+	if (!dev_id)
+		return -EINVAL;
+
+	if (flashlight_verify_index(dev_id->type, dev_id->ct, dev_id->part)) {
+		pr_info("Failed to unregister device (%d,%d,%d)\n",
+				dev_id->type, dev_id->ct, dev_id->part);
+		return -EINVAL;
+	}
+
+	pr_info("Unregister device (%d,%d,%d)\n",
+			dev_id->type, dev_id->ct, dev_id->part);
+
+	mutex_lock(&fl_mutex);
+	fdev = flashlight_find_dev_by_device_id(dev_id);
+	if (fdev) {
+		list_del(&fdev->node);
+		kfree(fdev);
+	}
+	mutex_unlock(&fl_mutex);
+
+	return 0;
+}
+EXPORT_SYMBOL(flashlight_dev_unregister_by_device_id);
+
+
+/******************************************************************************
+ * Vsync IRQ
+ *****************************************************************************/
+/*
+ * LED flash control for high current capture mode
+ * which is used by "imgsensor/src/[PLAT]/kd_sensorlist.c"
+ *
+ * Already be removed from kernel-4.4.
+ */
+ssize_t strobe_VDIrq(void)
+{
+	return 0;
+}
+EXPORT_SYMBOL(strobe_VDIrq);
+
+
+/******************************************************************************
+ * Charger Status
+ *****************************************************************************/
+static int flashlight_update_charger_status(struct flashlight_dev *fdev)
+{
+	struct flashlight_dev_arg fl_dev_arg;
+
+	if (!fdev || !fdev->ops) {
+		pr_info("Failed with no flashlight ops\n");
+		return -EINVAL;
+	}
+
+	/* ioctl */
+	fl_dev_arg.channel = fdev->dev_id.channel;
+	if (fdev->ops->flashlight_ioctl(FLASH_IOC_IS_CHARGER_READY,
+				(unsigned long)&fl_dev_arg))
+		pr_info("Failed to get charger status\n");
+	else
+		fdev->charger_status = fl_dev_arg.arg;
+
+	return 0;
+}
+
+
+/******************************************************************************
+ * Power throttling
+ *****************************************************************************/
+#ifdef CONFIG_MTK_FLASHLIGHT_DLPT
+void flashlight_kicker_pbm(bool status)
+{
+	kicker_pbm_by_flash(status);
+}
+EXPORT_SYMBOL(flashlight_kicker_pbm);
+
+void flashlight_kicker_pbm_by_device_id(
+		struct flashlight_device_id *dev_id,
+		unsigned int cur_mW)
+{
+	struct flashlight_dev *fdev;
+	unsigned int total_mW = 0;
+
+	list_for_each_entry(fdev, &flashlight_list, node) {
+		if (!fdev->ops)
+			continue;
+
+		if (fdev->dev_id.type == dev_id->type &&
+				fdev->dev_id.ct == dev_id->ct &&
+				fdev->dev_id.part == dev_id->part){
+			fdev->cur_mW = cur_mW;
+		}
+		total_mW = total_mW + fdev->cur_mW;
+	}
+
+	pr_info_ratelimited("kicker ppb (%u)mW", total_mW);
+#if IS_ENABLED(CONFIG_MTK_FLASHLIGHT_PPB)
+	kicker_ppb_request_power(KR_FLASHLIGHT, total_mW);
+#endif
+}
+EXPORT_SYMBOL(flashlight_kicker_pbm_by_device_id);
+#endif
+//ITD: Modify Flashlight Drv By Jesse 220405 Start
+#ifdef CONFIG_TRAN_FLASHLIGHT_THERMAL_CONTROL
+/******************************************************************************
+ * Timer and work queue
+ *****************************************************************************/
+static DEFINE_MUTEX(thermal_mutex);
+static int Flag = 1,Flag1 = 1, Flag2 = 1;
+static int currDutyLvl = -1;
+static int currSlideLvl = -1;
+static struct hrtimer thermal_timer;
+static struct work_struct thermal_work;
+static struct flashlight_dev *fdev_pcb;
+unsigned int flashCurrNow = 0;
+static void reduceFlashCurrent(void)
+{
+	int pcb_temp_now = 0;
+
+	struct flashlight_dev_arg fl_dev_arg;
+
+	if (fdev_pcb == NULL) {
+		pr_info("[%s] The flash is off\n", __FUNCTION__);
+	}else {
+		if(fdev_pcb->dev_id.type == 0) {
+		    if ((currSlideLvl > 0) && (flashCurrNow != currSlideLvl)) {
+		        Flag = 1;
+		        Flag1 = 1;
+		        Flag2 = 1;
+		        flashCurrNow = currSlideLvl;
+		    } else {
+		        fl_dev_arg.arg = currDutyLvl;
+		        fl_dev_arg.channel = fdev_pcb->dev_id.channel;
+		        //fdev_pcb->ops->flashlight_ioctl(FLASH_IOC_GET_DUTY_CURRENT,(unsigned long)&fl_dev_arg);
+		        //flashCurrNow = fl_dev_arg.arg;
+		    }
+		} else {
+		    flashCurrNow = (g_project_current_config[1].torch_duty_range[1] + g_project_current_config[1].torch_duty_range[0]) / 2;
+		}
+
+#if IS_ENABLED(CONFIG_TC_MISC_INTF)
+		pcb_temp_now = tc_get_tpcb_temp();
+#endif
+//		pr_info("[%s] Type:[%d] flashCurrNow:[%d] pcb_temp_now = %d\n", __FUNCTION__, fdev_pcb->dev_id.type, flashCurrNow,pcb_temp_now);
+		if(-127000 == pcb_temp_now) {
+		    pcb_temp_now = 0;
+		} else if(pcb_temp_now >= 40 && Flag  && pcb_temp_now < 45) {
+		    Flag = 0;
+		    fl_dev_arg.channel = fdev_pcb->dev_id.channel;
+		    fl_dev_arg.arg = flashCurrNow * 9 / 10;
+		    fdev_pcb->ops->flashlight_ioctl(FLASH_IOC_SET_CURRENT,(unsigned long)&fl_dev_arg);
+		    pr_info("[%s] temp_now:[%d] flashCurrNow:[%d]\n", __FUNCTION__, pcb_temp_now, fl_dev_arg.arg);
+		} else if(pcb_temp_now >= 45 && Flag1 && pcb_temp_now < 50) {
+		    Flag = 0;
+		    Flag1 = 0;
+		    fl_dev_arg.channel = fdev_pcb->dev_id.channel;
+		    fl_dev_arg.arg = flashCurrNow * 8 / 10;
+		    fdev_pcb->ops->flashlight_ioctl(FLASH_IOC_SET_CURRENT,(unsigned long)&fl_dev_arg);
+		    pr_info("[%s] temp_now:[%d] flashCurrNow:[%d]\n", __FUNCTION__, pcb_temp_now, fl_dev_arg.arg);
+		} else if(pcb_temp_now >= 50 && Flag2) {
+		    Flag = 0;
+		    Flag1 = 0;
+		    Flag2 = 0;
+		    fl_dev_arg.channel = fdev_pcb->dev_id.channel;
+		    fl_dev_arg.arg = flashCurrNow * 7 /10;
+		    fdev_pcb->ops->flashlight_ioctl(FLASH_IOC_SET_CURRENT,(unsigned long)&fl_dev_arg);
+		    pr_info("[%s] temp_now:[%d] flashCurrNow:[%d]\n", __FUNCTION__, pcb_temp_now, fl_dev_arg.arg);
+		}
+	}
+}
+
+static void thermal_work_polling(struct work_struct *data)
+{
+	mutex_lock(&thermal_mutex);
+	reduceFlashCurrent();
+	mutex_unlock(&thermal_mutex);
+}
+
+static enum hrtimer_restart thermal_timer_func(struct hrtimer *timer)
+{
+
+	schedule_work(&thermal_work);
+
+	hrtimer_forward_now(timer, ktime_set(5, 0));
+	return HRTIMER_RESTART;
+}
+#endif
+//ITD: Modify Flashlight Drv By Jesse 220405 End
+#ifdef CONFIG_MTK_FLASHLIGHT_PT
+int flashlight_pt_is_low(void)
+{
+	return pt_is_low(pt_low_vol, pt_low_bat, pt_over_cur);
+}
+EXPORT_SYMBOL(flashlight_pt_is_low);
+
+static int pt_arg_verify(int pt_low_vol, int pt_low_bat, int pt_over_cur)
+{
+	if (pt_low_vol < LOW_BATTERY_LEVEL_0 ||
+			pt_low_vol >= LOW_BATTERY_LEVEL_NUM) {
+		pr_info("PT low voltage (%d) is not valid\n", pt_low_vol);
+		return -1;
+	}
+	if (pt_low_bat < BATTERY_PERCENT_LEVEL_0 ||
+			pt_low_bat >= BATTERY_PERCENT_LEVEL_NUM) {
+		pr_info("PT low battery (%d) is not valid\n", pt_low_bat);
+		return -1;
+	}
+	if (pt_over_cur < BATTERY_OC_LEVEL_0 ||
+			pt_over_cur >= BATTERY_OC_LEVEL_NUM) {
+		pr_info("PT over current (%d) is not valid\n", pt_over_cur);
+		return -1;
+	}
+
+	return 0;
+}
+
+static int pt_is_low(int pt_low_vol, int pt_low_bat, int pt_over_cur)
+{
+	int is_low = 0;
+
+	if (pt_low_vol >= pt_low_bat_level ||
+			pt_low_bat >= pt_bat_pc_level ||
+			pt_over_cur >= pt_bat_oc_level) {
+		is_low = 1;
+		if (pt_strict)
+			is_low = 2;
+	}
+
+	return is_low;
+}
+
+static int pt_trigger(void)
+{
+	struct flashlight_dev *fdev;
+
+	mutex_lock(&fl_mutex);
+	list_for_each_entry(fdev, &flashlight_list, node) {
+		if (!fdev->ops)
+			continue;
+
+		fdev->ops->flashlight_open();
+		fdev->ops->flashlight_set_driver(1);
+		if (pt_strict) {
+			pr_info_ratelimited("PT trigger(%d,%d,%d) disable flashlight\n",
+				pt_low_vol, pt_low_bat, pt_over_cur);
+			fl_enable(fdev, 0);
+		} else {
+			pr_info_ratelimited("PT trigger(%d,%d,%d) decrease duty: %d\n",
+				pt_low_vol, pt_low_bat,
+				pt_over_cur, fdev->low_pt_level);
+			//ITD:modify by camera driver team start
+			//fl_set_level(fdev, fdev->low_pt_level);
+			//ITD:modify by camera driver team start
+		}
+		fdev->ops->flashlight_set_driver(0);
+		fdev->ops->flashlight_release();
+	}
+	mutex_unlock(&fl_mutex);
+
+	return 0;
+}
+
+static void pt_low_vol_callback(enum LOW_BATTERY_LEVEL_TAG level, void *data)
+{
+	pt_low_vol = level;
+
+	if (level >= pt_low_bat_level)
+		pt_trigger();
+}
+
+static void pt_low_bat_callback(enum BATTERY_PERCENT_LEVEL_TAG level)
+{
+	pt_low_bat = level;
+
+	if (level >= pt_bat_pc_level)
+		pt_trigger();
+}
+
+static void pt_oc_callback(enum BATTERY_OC_LEVEL_TAG level, void *data)
+{
+	pt_over_cur = level;
+
+	if (level >= pt_bat_oc_level)
+		pt_trigger();
+}
+#endif
+
+/******************************************************************************
+ * Thermal operations
+ *****************************************************************************/
+#if IS_ENABLED(CONFIG_MTK_FLASHLIGHT_THERMAL)
+static int flashlight_cooling_get_max_state(
+					struct thermal_cooling_device *cdev,
+					unsigned long *state)
+{
+	struct flashlight_cooling_device *f_cdev = cdev->devdata;
+
+	*state = f_cdev->max_state;
+
+	return 0;
+}
+
+static int flashlight_cooling_get_cur_state(
+					struct thermal_cooling_device *cdev,
+					unsigned long *state)
+{
+	struct flashlight_cooling_device *f_cdev = cdev->devdata;
+
+	*state = f_cdev->target_state;
+
+	return 0;
+}
+
+static int flashlight_cooling_set_cur_state(
+					struct thermal_cooling_device *cdev,
+					unsigned long state)
+{
+	struct flashlight_cooling_device *f_cdev = cdev->devdata;
+	struct flashlight_dev *fdev;
+	struct flashlight_dev_arg fl_dev_arg;
+
+	/* Request state should be less than max_state */
+	if (state > f_cdev->max_state)
+		return -EINVAL;
+
+	if (f_cdev->target_state == state)
+		return 0;
+
+	f_cdev->target_state = state;
+	mutex_lock(&fl_mutex);
+	list_for_each_entry(fdev, &flashlight_list, node) {
+		if (!fdev->ops)
+			continue;
+
+		fl_dev_arg.arg = state;
+		fl_dev_arg.channel = fdev->dev_id.channel;
+		fdev->ops->flashlight_ioctl(
+			FLASH_IOC_SET_THERMAL_CUR_STATE,
+			(unsigned long)&fl_dev_arg);
+	}
+	mutex_unlock(&fl_mutex);
+
+	return 0;
+}
+
+static struct thermal_cooling_device_ops flashlight_cooling_ops = {
+	.get_max_state		= flashlight_cooling_get_max_state,
+	.get_cur_state		= flashlight_cooling_get_cur_state,
+	.set_cur_state		= flashlight_cooling_set_cur_state,
+};
+#endif
+/******************************************************************************
+ * File operations
+ *****************************************************************************/
+static long _flashlight_ioctl(
+		struct file *file, unsigned int cmd, unsigned long arg)
+{
+	struct flashlight_user_arg fl_arg;
+	struct flashlight_dev_arg fl_dev_arg;
+	struct flashlight_dev *fdev;
+	int type, ct, part;
+	int ret = 0;
+
+	memset(&fl_arg, 0, sizeof(struct flashlight_user_arg));
+	if (copy_from_user(&fl_arg, (void __user *)arg,
+				sizeof(struct flashlight_user_arg))) {
+		pr_info("Failed copy arguments from user\n");
+		return -EFAULT;
+	}
+
+	/* find flashlight device */
+	mutex_lock(&fl_mutex);
+	fdev = flashlight_find_dev_by_index(
+			flashlight_get_type_index(fl_arg.type_id),
+			flashlight_get_ct_index(fl_arg.ct_id));
+	mutex_unlock(&fl_mutex);
+	if (!fdev) {
+		pr_info_ratelimited("Find no flashlight device\n");
+		return -EINVAL;
+	}
+
+	/* setup flash dev arguments */
+	fl_dev_arg.arg = fl_arg.arg;
+	fl_dev_arg.channel = fdev->dev_id.channel;
+	type = fdev->dev_id.type;
+	ct = fdev->dev_id.ct;
+	part = fdev->dev_id.part;
+
+	if (flashlight_verify_index(type, ct, part)) {
+		pr_info("Failed with error index\n");
+		return -EINVAL;
+	}
+
+	switch (cmd) {
+	case FLASH_IOC_GET_PROTOCOL_VERSION:
+		pr_debug("FLASH_IOC_GET_PROTOCOL_VERSION(%d,%d,%d): %d\n",
+				type, ct, part, FLASHLIGHT_PROTOCOL_VERSION);
+		ret = FLASHLIGHT_PROTOCOL_VERSION;
+		break;
+
+	case FLASH_IOC_IS_LOW_POWER:
+		fl_arg.arg = 0;
+#ifdef CONFIG_MTK_FLASHLIGHT_PT
+		fl_arg.arg = pt_is_low(pt_low_vol, pt_low_bat, pt_over_cur);
+		if (fl_arg.arg)
+			PR_INFO(debug_mask,"Pt status: (%d,%d,%d)\n",
+					pt_low_vol, pt_low_bat, pt_over_cur);
+#endif
+		if (copy_to_user((void __user *)arg, (void *)&fl_arg,
+					sizeof(struct flashlight_user_arg))) {
+			pr_info("Failed to copy power status to user\n");
+			return -EFAULT;
+		}
+		break;
+
+	case FLASH_IOC_LOW_POWER_DETECT_START:
+		PR_INFO(debug_mask,"FLASH_IOC_LOW_POWER_DETECT_START(%d,%d,%d): %d\n",
+				type, ct, part, fl_arg.arg);
+		mutex_lock(&fl_mutex);
+		fdev->low_pt_level = fl_arg.arg;
+		mutex_unlock(&fl_mutex);
+		break;
+
+	case FLASH_IOC_LOW_POWER_DETECT_END:
+		PR_INFO(debug_mask,"FLASH_IOC_LOW_POWER_DETECT_END(%d,%d,%d)\n",
+				type, ct, part);
+		mutex_lock(&fl_mutex);
+		fdev->low_pt_level = -1;
+		mutex_unlock(&fl_mutex);
+		break;
+
+	case FLASH_IOC_IS_CHARGER_READY:
+		mutex_lock(&fl_mutex);
+		flashlight_update_charger_status(fdev);
+		mutex_unlock(&fl_mutex);
+		fl_arg.arg = fdev->charger_status;
+		PR_INFO(debug_mask,"FLASH_IOC_IS_CHARGER_READY(%d,%d,%d): %d\n",
+				type, ct, part, fl_arg.arg);
+		if (copy_to_user((void __user *)arg, (void *)&fl_arg,
+					sizeof(struct flashlight_user_arg))) {
+			pr_info("Failed to copy charger status to user\n");
+			return -EFAULT;
+		}
+		break;
+
+	case FLASH_IOC_IS_HARDWARE_READY:
+		if (fdev->ops)
+			fl_arg.arg = 1;
+		else
+			fl_arg.arg = 0;
+		PR_INFO(debug_mask,"FLASH_IOC_IS_HARDWARE_READY(%d,%d,%d): %d\n",
+				type, ct, part, fl_arg.arg);
+		if (copy_to_user((void __user *)arg, (void *)&fl_arg,
+					sizeof(struct flashlight_user_arg))) {
+			pr_info("Failed to copy hardware status to user\n");
+			return -EFAULT;
+		}
+		break;
+
+	case FLASHLIGHTIOC_X_SET_DRIVER:
+		PR_INFO(debug_mask,"FLASHLIGHTIOC_X_SET_DRIVER(%d,%d,%d): %d\n",
+				type, ct, part, fl_arg.arg);
+		if (fdev->ops) {
+			ret = fdev->ops->flashlight_set_driver(fl_arg.arg);
+			if (fdev->dev_id.decouple) {
+				fl_dev_arg.arg = FLASHLIGHT_SCENARIO_DECOUPLE;
+				fdev->ops->flashlight_ioctl(
+					FLASH_IOC_SET_SCENARIO,
+					(unsigned long)&fl_dev_arg);
+			}
+		} else {
+			pr_info("Failed with no flashlight ops\n");
+			return -EFAULT;
+		}
+		break;
+//ITD:add flashlight debug switch by renzhi.li 2023/05/17 start
+	case FLASHLIGHTIOC_X_SET_DEBUG:
+		if(fl_dev_arg.arg == 1 )
+			debug_mask = 1;
+		else
+			debug_mask = 0;
+
+		break;
+////ITD:add flashlight debug switch by renzhi.li 2023/05/17 end
+	case FLASH_IOC_SET_SCENARIO:
+		PR_INFO(debug_mask,"FLASH_IOC_SET_SCENARIO(%d,%d,%d): %d\n",
+				type, ct, part, fl_arg.arg);
+		if (fdev->ops) {
+			if (fdev->dev_id.decouple)
+				fl_dev_arg.arg |= FLASHLIGHT_SCENARIO_DECOUPLE;
+			ret = fdev->ops->flashlight_ioctl(
+					cmd, (unsigned long)&fl_dev_arg);
+		} else {
+			pr_info("Failed with no flashlight ops\n");
+			return -EFAULT;
+		}
+		break;
+
+	case FLASH_IOC_GET_PART_ID:
+	case FLASH_IOC_GET_MAIN_PART_ID:
+	case FLASH_IOC_GET_SUB_PART_ID:
+	case FLASH_IOC_GET_MAIN2_PART_ID:
+		fl_arg.arg = flashlight_get_part_id(part);
+		PR_INFO(debug_mask,"FLASH_IOC_GET_PART_ID(%d,%d,%d): %d\n",
+				type, ct, part, fl_arg.arg);
+		if (copy_to_user((void __user *)arg, (void *)&fl_arg,
+					sizeof(struct flashlight_user_arg))) {
+			pr_info("Failed to copy part id to user\n");
+			return -EFAULT;
+		}
+		break;
+
+	case FLASH_IOC_SET_DUTY:
+		PR_INFO(debug_mask,"FLASH_IOC_SET_DUTY(%d,%d,%d): %d\n",
+				type, ct, part, fl_arg.arg);
+//ITD: Modify Flashlight Drv By Jesse 220405 Start
+#ifdef CONFIG_TRAN_FLASHLIGHT_THERMAL_CONTROL
+		if(type == 0){
+			currDutyLvl = fl_arg.arg;
+		}
+#endif
+//ITD: Modify Flashlight Drv By Jesse 22405 Start
+		mutex_lock(&fl_mutex);
+		ret = fl_set_level(fdev, fl_arg.arg);
+		mutex_unlock(&fl_mutex);
+		if (fdev->ops){
+			fdev->ops->flashlight_ioctl(FLASH_IOC_GET_DUTY_CURRENT,(unsigned long)&fl_dev_arg);
+			flashCurrNow = fl_dev_arg.arg;
+		}
+		break;
+
+	case FLASH_IOC_SET_ONOFF:
+		PR_INFO(debug_mask,"FLASH_IOC_SET_ONOFF(%d,%d,%d): %d\n",
+				type, ct, part, fl_arg.arg);
+		mutex_lock(&fl_mutex);
+		ret = fl_enable(fdev, fl_arg.arg);
+//ITD:modify for tele flash by yingfei.li 20240313 start
+		if((ct == 1)&&(type==0))
+		{
+			g_sysfs_inited[2] = fl_arg.arg;
+			g_sysfs_strobe_level[2] = fl_arg.arg;
+		}
+		else
+		{
+			g_sysfs_inited[fdev->dev_id.type] = fl_arg.arg;
+			g_sysfs_strobe_level[fdev->dev_id.type] = fl_arg.arg;
+		}
+//ITD:modify for tele flash by yingfei.li 20240313 end
+		if(g_device[type]!=NULL)
+		{
+			if(fl_arg.arg)
+				envp[0] = "TORCH=LOW1";
+			else
+				envp[0] = "TORCH=OFF";
+			kobject_uevent_env(&g_device[type]->kobj, KOBJ_CHANGE, envp);
+		}
+
+#ifdef CONFIG_TRAN_FLASHLIGHT_THERMAL_CONTROL
+		if(type == 0){
+			if(fl_arg.arg == 1){
+				Flag = 1;
+				Flag1 = 1;
+				Flag2 = 1;
+				fdev_pcb = fdev;
+				hrtimer_start(&thermal_timer, ktime_set(1, 0), HRTIMER_MODE_REL);
+			}else{
+				hrtimer_cancel(&thermal_timer);
+//ITD: Modify Flashlight Drv By yingji.wang 231030 start
+			   // fdev_pcb = NULL; 
+//ITD: Modify Flashlight Drv By yingji.wang 231030 end
+			}
+		}
+#endif
+//ITD: Modify Flashlight Drv By Jesse 220405 End
+//ITD:add tran torch status get by qinlong.lu 2024/07/24 start
+#ifdef CONFIG_TRAN_TORCH_ST_GET
+		tran_torch_status_notifier_call_chain(type, &fl_arg.arg);
+#endif
+//ITD:add tran torch status get by qinlong.lu 2024/07/24 end
+		mutex_unlock(&fl_mutex);
+		break;
+
+	case FLASH_IOC_GET_DUTY_NUMBER:
+	case FLASH_IOC_GET_DUTY_CURRENT:
+	case FLASH_IOC_GET_HW_FAULT:
+	case FLASH_IOC_GET_HW_FAULT2:
+		if (fdev->ops) {
+			ret = fdev->ops->flashlight_ioctl(
+					cmd, (unsigned long)&fl_dev_arg);
+			fl_arg.arg = fl_dev_arg.arg;
+			if (copy_to_user((void __user *)arg, (void *)&fl_arg,
+					sizeof(struct flashlight_user_arg))) {
+				pr_info("Failed to copy arg to user cmd:%d\n",
+					_IOC_NR(cmd));
+				return -EFAULT;
+			}
+		} else {
+			pr_info("Failed with no flashlight ops\n");
+			return -ENOTTY;
+		}
+		break;
+
+//ITD: Modify Flashlight Drv By Jesse 220405 Start
+	case FLASH_IOC_SET_SLIDE_CONTROL:
+		PR_INFO(debug_mask,"FLASH_IOC_SET_SLIDE_CONTROL(%d,%d,%d): %d\n",
+				type, ct, part, fl_arg.arg);
+		mutex_lock(&fl_mutex);
+		if (fdev->ops) {
+			//(100-10)/(31-1) = (x-10)/(y-1)
+			int min_max_diff = g_project_current_config[type].torch_duty_range[1] - g_project_current_config[type].torch_duty_range[0];
+			fl_dev_arg.arg = fl_dev_arg.arg<10?10:(fl_dev_arg.arg>100?100:fl_dev_arg.arg);
+			fl_dev_arg.arg = g_project_current_config[type].torch_duty_range[0] + (fl_dev_arg.arg-10)*min_max_diff/(100-10);
+			if (fdev->ops->flashlight_ioctl(FLASH_IOC_SET_CURRENT,
+						(unsigned long)&fl_dev_arg)) {
+				pr_err("Failed to set level\n");
+				mutex_unlock(&fl_mutex);
+				return -EFAULT;
+			}
+			flashCurrNow = fl_dev_arg.arg;
+		} else {
+			pr_info("Failed with no flashlight ops\n");
+			mutex_unlock(&fl_mutex);
+			return -EFAULT;
+		}
+		mutex_unlock(&fl_mutex);
+		break;
+//ITD: Modify Flashlight Drv By Jesse 220405 End
+	default:
+		if (fdev->ops)
+			ret = fdev->ops->flashlight_ioctl(
+					cmd, (unsigned long)&fl_dev_arg);
+		else {
+			pr_info("Failed with no flashlight ops\n");
+			return -ENOTTY;
+		}
+		break;
+	}
+
+	return ret;
+}
+
+static long flashlight_ioctl(
+		struct file *file, unsigned int cmd, unsigned long arg)
+{
+	return _flashlight_ioctl(file, cmd, arg);
+}
+
+#ifdef CONFIG_COMPAT
+static long flashlight_compat_ioctl(
+		struct file *filep, unsigned int cmd, unsigned long arg)
+{
+	return _flashlight_ioctl(filep, cmd, (unsigned long)compat_ptr(arg));
+}
+#endif
+
+static int flashlight_open(struct inode *inode, struct file *file)
+{
+	struct flashlight_dev *fdev;
+
+	mutex_lock(&fl_mutex);
+	list_for_each_entry(fdev, &flashlight_list, node) {
+		if (!fdev->ops)
+			continue;
+
+		fdev->ops->flashlight_open();
+	}
+	mutex_unlock(&fl_mutex);
+
+	return 0;
+}
+
+static int flashlight_release(struct inode *inode, struct file *file)
+{
+	struct flashlight_dev *fdev;
+
+	mutex_lock(&fl_mutex);
+	list_for_each_entry(fdev, &flashlight_list, node) {
+		if (!fdev->ops)
+			continue;
+
+		fdev->ops->flashlight_release();
+	}
+	mutex_unlock(&fl_mutex);
+
+	return 0;
+}
+
+static const struct file_operations flashlight_fops = {
+	.owner = THIS_MODULE,
+	.unlocked_ioctl = flashlight_ioctl,
+	.open = flashlight_open,
+	.release = flashlight_release,
+#ifdef CONFIG_COMPAT
+	.compat_ioctl = flashlight_compat_ioctl,
+#endif
+};
+
+
+/******************************************************************************
+ * SYSFS
+ *****************************************************************************/
+/* flashlight strobe sysfs */
+static ssize_t flashlight_strobe_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	pr_debug("Strobe show\n");
+
+	return scnprintf(buf, PAGE_SIZE,
+			"[TYPE] [CT] [PART] [LEVEL] [DURATION(ms)]\n");
+}
+
+static ssize_t flashlight_strobe_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t size)
+{
+	struct flashlight_dev *fdev;
+	struct flashlight_arg fl_arg;
+	s32 num;
+	int count = 0;
+	char delim[] = " ";
+	char *token, *cur = (char *)buf;
+	int ret;
+
+	pr_debug("Strobe store\n");
+
+	while (cur) {
+		token = strsep(&cur, delim);
+		ret = kstrtos32(token, 10, &num);
+		if (ret) {
+			pr_info("Error arguments\n");
+			goto unlock;
+		}
+
+		if (count == FLASHLIGHT_ARG_TYPE)
+			fl_arg.type = (int)num;
+		else if (count == FLASHLIGHT_ARG_CT)
+			fl_arg.ct = (int)num;
+		else if (count == FLASHLIGHT_ARG_PART)
+			fl_arg.part = (int)num;
+		else if (count == FLASHLIGHT_ARG_LEVEL)
+			fl_arg.level = (int)num;
+		else if (count == FLASHLIGHT_ARG_DUR)
+			fl_arg.dur = (int)num;
+		else {
+			count++;
+			break;
+		}
+
+		count++;
+	}
+
+	/* verify data */
+	if (count != FLASHLIGHT_ARG_NUM) {
+		pr_info("Error argument number: (%d)\n", count);
+		ret = -1;
+		goto unlock;
+	}
+	if (flashlight_verify_arg(fl_arg)) {
+		pr_info("Error arguments\n");
+		ret = -1;
+		goto unlock;
+	}
+
+	pr_debug("(%d, %d, %d), (%d, %d)\n",
+			fl_arg.type, fl_arg.ct, fl_arg.part,
+			fl_arg.level, fl_arg.dur);
+
+	/* call callback function */
+	mutex_lock(&fl_mutex);
+	fdev = flashlight_find_dev_by_full_index(
+			fl_arg.type, fl_arg.ct, fl_arg.part);
+	mutex_unlock(&fl_mutex);
+	if (!fdev) {
+		pr_info("Find no flashlight device\n");
+		ret = -1;
+		goto unlock;
+	}
+
+	fl_arg.channel = fdev->dev_id.channel;
+	fl_arg.decouple = fdev->dev_id.decouple;
+
+	pr_info("channel:%d decouple:%d\n",
+			fl_arg.channel, fl_arg.decouple);
+
+	if (fdev->ops) {
+		fdev->ops->flashlight_strobe_store(fl_arg);
+		ret = size;
+	} else {
+		pr_info("Failed with no flashlight ops\n");
+		ret = -1;
+	}
+
+unlock:
+	return ret;
+}
+static DEVICE_ATTR_RW(flashlight_strobe);
+
+/* pt status sysfs */
+static ssize_t flashlight_pt_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	pr_debug("Power throttling show\n");
+
+#ifdef CONFIG_MTK_FLASHLIGHT_PT
+	return scnprintf(buf, PAGE_SIZE,
+			"[LOW_VOLTAGE] [LOW_BATTERY] [OVER_CURRENT] [PT_STRICT]\n%d %d %d %d\n",
+			pt_low_vol, pt_low_bat, pt_over_cur, pt_strict);
+#else
+	return scnprintf(buf, PAGE_SIZE,
+			"No support power throttling\n");
+#endif
+}
+
+static ssize_t flashlight_pt_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t size)
+{
+	int low_vol = 0;
+	int low_bat = 0;
+	int over_cur = 0;
+	int strict = 1;
+	u32 num;
+	int count = 0;
+	char delim[] = " ";
+	char *token, *cur = (char *)buf;
+	int ret;
+
+	pr_debug("Power throttling store\n");
+
+	while (cur) {
+		token = strsep(&cur, delim);
+		ret = kstrtou32(token, 10, &num);
+		if (ret) {
+			pr_info("Error arguments\n");
+			goto unlock;
+		}
+
+		if (count == PT_NOTIFY_LOW_VOL)
+			low_vol = (int)num;
+		else if (count == PT_NOTIFY_LOW_BAT)
+			low_bat = (int)num;
+		else if (count == PT_NOTIFY_OVER_CUR)
+			over_cur = (int)num;
+		else if (count == PT_NOTIFY_STRICT)
+			strict = (int)num;
+		else {
+			count++;
+			break;
+		}
+
+		count++;
+	}
+
+	/* verify data */
+	if (count != PT_NOTIFY_NUM) {
+		pr_info("Error argument number: (%d)\n", count);
+		ret = -1;
+		goto unlock;
+	}
+
+#ifdef CONFIG_MTK_FLASHLIGHT_PT
+	if (pt_arg_verify(low_vol, low_bat, over_cur) ||
+			strict < 0 || strict > 1) {
+		pr_info("Error arguments\n");
+		ret = -1;
+		goto unlock;
+	}
+	pr_debug("PT status (%d, %d, %d) with strict(%d)\n",
+			low_vol, low_bat, over_cur, strict);
+
+	/* call callback function */
+	pt_strict = strict;
+	pt_low_vol_callback(low_vol, NULL);
+	pt_low_bat_callback(low_bat);
+	pt_oc_callback(over_cur, NULL);
+#endif
+
+	ret = size;
+unlock:
+	return ret;
+}
+static DEVICE_ATTR_RW(flashlight_pt);
+
+/* charger status sysfs */
+static ssize_t flashlight_charger_show(
+		struct device *dev, struct device_attribute *attr, char *buf)
+{
+	struct flashlight_dev *fdev;
+	char status[FLASHLIGHT_CHARGER_STATUS_BUF_SIZE];
+	char status_tmp[FLASHLIGHT_CHARGER_STATUS_TMPBUF_SIZE];
+	int ret;
+
+	pr_debug("Charger status show\n");
+
+	memset(status, '\0', FLASHLIGHT_CHARGER_STATUS_BUF_SIZE);
+
+	mutex_lock(&fl_mutex);
+	list_for_each_entry(fdev, &flashlight_list, node) {
+		if (!fdev->ops)
+			continue;
+
+		flashlight_update_charger_status(fdev);
+		ret = snprintf(status_tmp,
+				FLASHLIGHT_CHARGER_STATUS_TMPBUF_SIZE,
+				"%d %d %d %d\n", fdev->dev_id.type,
+				fdev->dev_id.ct, fdev->dev_id.part,
+				fdev->charger_status);
+		if (ret < 0)
+			pr_info("snprintf failed\n");
+
+		strncat(status, status_tmp,
+				FLASHLIGHT_CHARGER_STATUS_TMPBUF_SIZE);
+	}
+	mutex_unlock(&fl_mutex);
+
+	return scnprintf(buf, PAGE_SIZE,
+			"[TYPE] [CT] [PART] [CHARGER_STATUS]\n%s\n", status);
+}
+
+static ssize_t flashlight_charger_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t size)
+{
+	struct flashlight_dev *fdev;
+	struct flashlight_arg fl_arg;
+	int charger_status_tmp = 0;
+	s32 num;
+	int count = 0;
+	char delim[] = " ";
+	char *token, *cur = (char *)buf;
+	int ret;
+
+	pr_debug("Charger status store\n");
+
+	memset(&fl_arg, 0, sizeof(struct flashlight_arg));
+
+	while (cur) {
+		token = strsep(&cur, delim);
+		ret = kstrtos32(token, 10, &num);
+		if (ret) {
+			pr_info("Error arguments\n");
+			goto unlock;
+		}
+
+		if (count == FLASHLIGHT_CHARGER_TYPE)
+			fl_arg.type = (int)num;
+		else if (count == FLASHLIGHT_CHARGER_CT)
+			fl_arg.ct = (int)num;
+		else if (count == FLASHLIGHT_CHARGER_PART)
+			fl_arg.part = (int)num;
+		else if (count == FLASHLIGHT_CHARGER_STATUS)
+			charger_status_tmp = (int)num;
+		else {
+			count++;
+			break;
+		}
+
+		count++;
+	}
+
+	/* verify data */
+	if (count != FLASHLIGHT_CHARGER_NUM) {
+		pr_info("Error argument number: (%d)\n", count);
+		ret = -1;
+		goto unlock;
+	}
+	if (flashlight_verify_index(fl_arg.type, fl_arg.ct, fl_arg.part)) {
+		pr_info("Error arguments\n");
+		ret = -1;
+		goto unlock;
+	}
+	if (charger_status_tmp < FLASHLIGHT_CHARGER_NOT_READY ||
+			charger_status_tmp > FLASHLIGHT_CHARGER_READY) {
+		pr_info("Error arguments charger status(%d)\n",
+				charger_status_tmp);
+		ret = -1;
+		goto unlock;
+	}
+
+	pr_debug("(%d, %d, %d), (%d)\n", fl_arg.type, fl_arg.ct, fl_arg.part,
+			charger_status_tmp);
+
+	/* store charger status */
+	mutex_lock(&fl_mutex);
+	fdev = flashlight_find_dev_by_full_index(
+			fl_arg.type, fl_arg.ct, fl_arg.part);
+	mutex_unlock(&fl_mutex);
+	if (!fdev) {
+		pr_info("Find no flashlight device\n");
+		ret = -1;
+		goto unlock;
+	}
+
+	fdev->charger_status = charger_status_tmp;
+
+	ret = size;
+unlock:
+	return ret;
+}
+static DEVICE_ATTR_RW(flashlight_charger);
+
+/* torch status sysfs */
+static ssize_t flashlight_torch_show(
+		struct device *dev, struct device_attribute *attr, char *buf)
+{
+	struct flashlight_dev *fdev;
+	char status[FLASHLIGHT_TORCH_STATUS_BUF_SIZE];
+	char status_tmp[FLASHLIGHT_TORCH_STATUS_TMPBUF_SIZE];
+	int ret;
+
+	pr_debug("Torch status show\n");
+
+	memset(status, '\0', FLASHLIGHT_TORCH_STATUS_BUF_SIZE);
+
+	mutex_lock(&fl_mutex);
+	list_for_each_entry(fdev, &flashlight_list, node) {
+		if (!fdev->ops)
+			continue;
+
+		ret = snprintf(status_tmp,
+				FLASHLIGHT_TORCH_STATUS_TMPBUF_SIZE,
+				"%d %d %d %d\n", fdev->dev_id.type,
+				fdev->dev_id.ct, fdev->dev_id.part,
+				fdev->torch_status);
+		if (ret < 0)
+			pr_info("snprintf failed\n");
+
+		strncat(status, status_tmp,
+				FLASHLIGHT_TORCH_STATUS_TMPBUF_SIZE);
+	}
+	mutex_unlock(&fl_mutex);
+
+	return scnprintf(buf, PAGE_SIZE,
+			"[TYPE] [CT] [PART] [TORCH_STATUS]\n%s\n", status);
+}
+
+static ssize_t flashlight_torch_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t size)
+{
+	struct flashlight_dev *fdev;
+	struct flashlight_arg fl_arg;
+	struct flashlight_dev_arg fl_dev_arg;
+	int torch_status_tmp = 0;
+	s32 num;
+	int count = 0;
+	char delim[] = " ";
+	char *token, *cur = (char *)buf;
+	int ret;
+
+	pr_debug("Torch status store\n");
+
+	memset(&fl_arg, 0, sizeof(struct flashlight_arg));
+
+	while (cur) {
+		token = strsep(&cur, delim);
+		ret = kstrtos32(token, 10, &num);
+		if (ret) {
+			pr_info("Error arguments\n");
+			goto unlock;
+		}
+
+		if (count == FLASHLIGHT_TORCH_TYPE)
+			fl_arg.type = (int)num;
+		else if (count == FLASHLIGHT_TORCH_CT)
+			fl_arg.ct = (int)num;
+		else if (count == FLASHLIGHT_TORCH_PART)
+			fl_arg.part = (int)num;
+		else if (count == FLASHLIGHT_TORCH_STATUS)
+			torch_status_tmp = (int)num;
+		else {
+			count++;
+			break;
+		}
+
+		count++;
+	}
+
+	/* verify data */
+	if (count != FLASHLIGHT_TORCH_NUM) {
+		pr_info("Error argument number: (%d)\n", count);
+		ret = -1;
+		goto unlock;
+	}
+	if (flashlight_verify_index(fl_arg.type, fl_arg.ct, fl_arg.part)) {
+		pr_info("Error arguments\n");
+		ret = -1;
+		goto unlock;
+	}
+	if (torch_status_tmp < FLASHLIGHT_TORCH_OFF ||
+			torch_status_tmp > FLASHLIGHT_TORCH_ON) {
+		pr_info("Error arguments torch status(%d)\n",
+				torch_status_tmp);
+		ret = -1;
+		goto unlock;
+	}
+
+	pr_debug("(%d, %d, %d), (%d)\n", fl_arg.type, fl_arg.ct, fl_arg.part,
+			torch_status_tmp);
+
+	/* store torch status */
+	mutex_lock(&fl_mutex);
+	fdev = flashlight_find_dev_by_full_index(
+			fl_arg.type, fl_arg.ct, fl_arg.part);
+	mutex_unlock(&fl_mutex);
+	if (!fdev) {
+		pr_info("Find no flashlight device\n");
+		ret = -1;
+		goto unlock;
+	}
+
+	pr_info("torch status:%d\n", fdev->torch_status);
+	if (fdev->ops && (fdev->torch_status != torch_status_tmp)) {
+		if (torch_status_tmp) {
+			fdev->ops->flashlight_open();
+			fdev->ops->flashlight_set_driver(1);
+//ITD: add breathing light tools test by xinwang.sha 20251217 start
+			if(fl_arg.type == 0 && fl_arg.ct == 1 && fl_arg.part == 0){
+				fl_set_current(fdev,flash_call_current2[ARRAY_SIZE(flash_call_current2)-1]);
+			}
+//ITD: add breathing light tools test by xinwang.sha 20251217 end
+			fl_enable(fdev, 1);
+		} else {
+			fl_enable(fdev, 0);
+			//ITD: modify Factory Test By haiyang.he 20250806 start
+			fl_dev_arg.channel = fdev->dev_id.channel;
+			fl_dev_arg.arg = -1;
+			fdev->ops->flashlight_ioctl(FLASH_IOC_GET_HW_FAULT,
+				(unsigned long)&fl_dev_arg);
+			fdev->fault = fl_dev_arg.arg;
+			//ITD: modify Factory Test By haiyang.he 20250806 end
+			fdev->ops->flashlight_set_driver(0);
+			fdev->ops->flashlight_release();
+		}
+	}
+	fdev->torch_status = torch_status_tmp;
+
+	ret = size;
+unlock:
+	return ret;
+}
+static DEVICE_ATTR_RW(flashlight_torch);
+
+
+/* flashlight capability sysfs */
+static ssize_t flashlight_capability_show(
+		struct device *dev, struct device_attribute *attr, char *buf)
+{
+	struct flashlight_dev *fdev;
+	struct flashlight_dev_arg fl_dev_arg;
+
+	/* flashlight capability */
+	int hw_timeout;
+	int max_duty;
+	int max_torch_duty;
+	char capability[FLASHLIGHT_CAPABILITY_BUF_SIZE];
+	char capability_tmp[FLASHLIGHT_CAPABILITY_TMPBUF_SIZE];
+	int ret;
+
+	pr_debug("Capability show\n");
+
+	memset(capability, '\0', FLASHLIGHT_CAPABILITY_BUF_SIZE);
+
+	mutex_lock(&fl_mutex);
+	list_for_each_entry(fdev, &flashlight_list, node) {
+		if (!fdev->ops)
+			continue;
+
+		fl_dev_arg.channel = fdev->dev_id.channel;
+
+		fl_dev_arg.arg = -1;
+		fdev->ops->flashlight_ioctl(FLASH_IOC_GET_HW_TIMEOUT,
+				(unsigned long)&fl_dev_arg);
+		hw_timeout = fl_dev_arg.arg;
+
+		fl_dev_arg.arg = -1;
+		fdev->ops->flashlight_ioctl(FLASH_IOC_GET_DUTY_NUMBER,
+				(unsigned long)&fl_dev_arg);
+		max_duty = fl_dev_arg.arg - 1;
+
+		fl_dev_arg.arg = -1;
+		fdev->ops->flashlight_ioctl(FLASH_IOC_GET_MAX_TORCH_DUTY,
+				(unsigned long)&fl_dev_arg);
+		max_torch_duty = fl_dev_arg.arg;
+
+		ret = snprintf(capability_tmp,
+				FLASHLIGHT_CAPABILITY_TMPBUF_SIZE,
+				"%d %d %d %s %d %d %d %d %d\n",
+				fdev->dev_id.type, fdev->dev_id.ct,
+				fdev->dev_id.part, fdev->dev_id.name,
+				fdev->dev_id.channel, fdev->dev_id.decouple,
+				hw_timeout, max_duty, max_torch_duty);
+		if (ret < 0)
+			pr_info("snprintf failed\n");
+		strncat(capability, capability_tmp,
+				FLASHLIGHT_CAPABILITY_TMPBUF_SIZE);
+	}
+	mutex_unlock(&fl_mutex);
+
+	return scnprintf(buf, PAGE_SIZE,
+			"[TYPE] [CT] [PART] [DEVICE] [CHANNEL] [DECOUPLE] [HW TIMEOUT] [MAX DUTY] [MAX TORCH DUTY]\n%s\n",
+			capability);
+}
+static DEVICE_ATTR_RO(flashlight_capability);
+
+/* flashlight current sysfs */
+static ssize_t flashlight_current_show(
+		struct device *dev, struct device_attribute *attr, char *buf)
+{
+	struct flashlight_dev *fdev;
+	struct flashlight_dev_arg fl_dev_arg;
+	int i, ret;
+
+	/* flashlight current */
+	int duty_num = 0;
+	char duty_current_tmp[FLASHLIGHT_DUTY_CURRENT_TMPBUF_SIZE];
+	char duty_current[FLASHLIGHT_DUTY_CURRENT_BUF_SIZE];
+
+	pr_debug("Current show\n");
+
+	memset(duty_current, '\0', FLASHLIGHT_DUTY_CURRENT_BUF_SIZE);
+
+	mutex_lock(&fl_mutex);
+	fdev = flashlight_find_dev_by_full_index(duty_current_arg.type,
+			duty_current_arg.ct, duty_current_arg.part);
+	mutex_unlock(&fl_mutex);
+
+	if (fdev && fdev->ops) {
+		fl_dev_arg.channel = fdev->dev_id.channel;
+
+		fl_dev_arg.arg = -1;
+		fdev->ops->flashlight_ioctl(FLASH_IOC_GET_DUTY_NUMBER,
+				(unsigned long)&fl_dev_arg);
+		duty_num = fl_dev_arg.arg;
+
+		ret = snprintf(duty_current, FLASHLIGHT_DUTY_CURRENT_BUF_SIZE,
+				"%d %d %d %d ", fdev->dev_id.type,
+				fdev->dev_id.ct, fdev->dev_id.part, duty_num);
+		if (ret < 0)
+			pr_info("snprintf failed\n");
+
+		for (i = 0; i < duty_num; i++) {
+			fl_dev_arg.arg = i;
+			if (fdev->ops->flashlight_ioctl(
+						FLASH_IOC_GET_DUTY_CURRENT,
+						(unsigned long)&fl_dev_arg))
+				break;
+			snprintf(duty_current_tmp,
+					FLASHLIGHT_DUTY_CURRENT_TMPBUF_SIZE,
+					"%d,", fl_dev_arg.arg);
+			strncat(duty_current, duty_current_tmp,
+					FLASHLIGHT_DUTY_CURRENT_TMPBUF_SIZE);
+		}
+		duty_current[strlen(duty_current) - 1] = '\0';
+	} else {
+		ret = snprintf(duty_current, FLASHLIGHT_DUTY_CURRENT_BUF_SIZE,
+				"%d %d %d %d ", duty_current_arg.type,
+				duty_current_arg.ct, duty_current_arg.part,
+				duty_num);
+		if (ret < 0)
+			pr_info("snprintf failed\n");
+	}
+
+	return scnprintf(buf, PAGE_SIZE,
+			"[TYPE] [CT] [PART] [DUTY NUM] [DUTY CURRENT]\n%s\n",
+			duty_current);
+}
+
+static ssize_t flashlight_current_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t size)
+{
+	struct flashlight_arg fl_arg;
+	s32 num;
+	int count = 0;
+	char delim[] = " ";
+	char *token, *cur = (char *)buf;
+	int ret;
+
+	pr_debug("Current store\n");
+
+	memset(&fl_arg, 0, sizeof(struct flashlight_arg));
+
+	while (cur) {
+		token = strsep(&cur, delim);
+		ret = kstrtos32(token, 10, &num);
+		if (ret) {
+			pr_info("Error arguments\n");
+			goto unlock;
+		}
+
+		if (count == FLASHLIGHT_CURRENT_TYPE)
+			fl_arg.type = (int)num;
+		else if (count == FLASHLIGHT_CURRENT_CT)
+			fl_arg.ct = (int)num;
+		else if (count == FLASHLIGHT_CURRENT_PART)
+			fl_arg.part = (int)num;
+		else {
+			count++;
+			break;
+		}
+
+		count++;
+	}
+
+	/* verify data */
+	if (count != FLASHLIGHT_CURRENT_NUM) {
+		pr_info("Error argument number: (%d)\n", count);
+		ret = -1;
+		goto unlock;
+	}
+	if (flashlight_verify_index(fl_arg.type, fl_arg.ct, fl_arg.part)) {
+		pr_info("Error arguments\n");
+		ret = -1;
+		goto unlock;
+	}
+
+	pr_debug("(%d, %d, %d)\n",
+			fl_arg.type, fl_arg.ct, fl_arg.part);
+
+	/* store duty current */
+	duty_current_arg = fl_arg;
+
+	ret = size;
+unlock:
+	return ret;
+}
+static DEVICE_ATTR_RW(flashlight_current);
+
+/* flashlight fault sysfs */
+static ssize_t flashlight_fault_show(
+		struct device *dev, struct device_attribute *attr, char *buf)
+{
+	struct flashlight_dev *fdev;
+
+	/* flashlight capability */
+	int fault_flag1;
+	int fault_flag2;
+	char fault[FLASHLIGHT_FAULT_BUF_SIZE];
+	char fault_tmp[FLASHLIGHT_FAULT_TMPBUF_SIZE];
+	int ret;
+
+	pr_debug("Fault show\n");
+
+	memset(fault, '\0', FLASHLIGHT_FAULT_BUF_SIZE);
+
+	mutex_lock(&fl_mutex);
+	list_for_each_entry(fdev, &flashlight_list, node) {
+		if (!fdev->ops)
+			continue;
+		//ITD: modify Factory Test By haiyang.he 20250806 start
+		fault_flag1 = fdev->fault;
+		fault_flag2 = fdev->fault;
+		//ITD: modify Factory Test By haiyang.he 20250806 end
+
+		ret = snprintf(fault_tmp, FLASHLIGHT_FAULT_TMPBUF_SIZE,
+				"%d %d %d %s %d %d %d %d\n",
+				fdev->dev_id.type, fdev->dev_id.ct,
+				fdev->dev_id.part, fdev->dev_id.name,
+				fdev->dev_id.channel, fdev->dev_id.decouple,
+				fault_flag1, fault_flag2);
+		if (ret < 0)
+			pr_info("snprintf failed\n");
+		strncat(fault, fault_tmp,
+				FLASHLIGHT_FAULT_TMPBUF_SIZE);
+	}
+	mutex_unlock(&fl_mutex);
+
+	return scnprintf(buf, PAGE_SIZE,
+			"[TYPE] [CT] [PART] [DEVICE] [CHANNEL] [DECOUPLE] [FAULT FLAG1] [FAULT FLAG2]\n%s\n",
+			fault);
+}
+static DEVICE_ATTR_RO(flashlight_fault);
+
+/* sw disable sysfs */
+static ssize_t flashlight_sw_disable_show(
+		struct device *dev, struct device_attribute *attr, char *buf)
+{
+	struct flashlight_dev *fdev;
+	char status[FLASHLIGHT_SW_DISABLE_STATUS_BUF_SIZE];
+	char status_tmp[FLASHLIGHT_SW_DISABLE_STATUS_TMPBUF_SIZE];
+	int ret;
+
+	pr_debug("Sw disable status show\n");
+
+	memset(status, '\0', FLASHLIGHT_SW_DISABLE_STATUS_BUF_SIZE);
+
+	mutex_lock(&fl_mutex);
+	list_for_each_entry(fdev, &flashlight_list, node) {
+		if (!fdev->ops)
+			continue;
+
+		ret = snprintf(status_tmp,
+				FLASHLIGHT_SW_DISABLE_STATUS_TMPBUF_SIZE,
+				"%d %d\n", fdev->dev_id.type,
+				fdev->sw_disable_status);
+		if (ret < 0)
+			pr_info("snprintf failed\n");
+		strncat(status, status_tmp,
+				FLASHLIGHT_SW_DISABLE_STATUS_TMPBUF_SIZE);
+	}
+	mutex_unlock(&fl_mutex);
+
+	return scnprintf(buf, PAGE_SIZE,
+			"[TYPE] [SW_DISABLE_STATUS]\n%s\n", status);
+}
+
+static ssize_t flashlight_sw_disable_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t size)
+{
+	struct flashlight_dev *fdev;
+	struct flashlight_arg fl_arg;
+	int sw_disable_status_tmp = 0;
+	s32 num;
+	int count = 0;
+	char delim[] = " ";
+	char *token, *cur = (char *)buf;
+	int ret;
+
+	pr_debug("Sw disable store\n");
+
+	memset(&fl_arg, 0, sizeof(struct flashlight_arg));
+
+	while (cur) {
+		token = strsep(&cur, delim);
+		ret = kstrtos32(token, 10, &num);
+		if (ret) {
+			pr_info("Error arguments\n");
+			goto unlock;
+		}
+
+		if (count == FLASHLIGHT_SW_DISABLE_TYPE)
+			fl_arg.type = (int)num;
+		else if (count == FLASHLIGHT_SW_DISABLE_STATUS)
+			sw_disable_status_tmp = (int)num;
+		else {
+			count++;
+			break;
+		}
+
+		count++;
+	}
+
+	/* verify data */
+	if (count != FLASHLIGHT_SW_DISABLE_NUM) {
+		pr_info("Error argument number: (%d)\n", count);
+		ret = -1;
+		goto unlock;
+	}
+	if (sw_disable_status_tmp < FLASHLIGHT_SW_DISABLE_OFF ||
+			sw_disable_status_tmp > FLASHLIGHT_SW_DISABLE_ON) {
+		pr_info("Error arguments sw disable status(%d)\n",
+				sw_disable_status_tmp);
+		ret = -1;
+		goto unlock;
+	}
+
+	pr_debug("(%d), (%d)\n", fl_arg.type, sw_disable_status_tmp);
+
+	/* store sw_disable status */
+	mutex_lock(&fl_mutex);
+	list_for_each_entry(fdev, &flashlight_list, node) {
+		if (!fdev->ops)
+			continue;
+		if (fl_arg.type == fdev->dev_id.type) {
+			if (sw_disable_status_tmp == FLASHLIGHT_SW_DISABLE_ON)
+				fl_enable(fdev, 0);
+
+			fdev->sw_disable_status = sw_disable_status_tmp;
+		}
+	}
+	mutex_unlock(&fl_mutex);
+	ret = size;
+unlock:
+	return ret;
+}
+static DEVICE_ATTR_RW(flashlight_sw_disable);
+
+//ITD: Modify Flashlight Drv By Jesse 220405 Start
+static int SysUITorchMode = 0;
+static struct class *torch_class = NULL;
+static struct class *sub_torch_class = NULL;
+
+static struct device *torch_dev = NULL;
+static struct device *sub_torch_dev = NULL;
+
+static struct device_attribute dev_attr_torch_level;
+static struct device_attribute dev_attr_sub_torch_level;
+//ITD:modify for tele flash by yingfei.li 20240313 start
+static struct class *tele_torch_class = NULL;
+static struct device *tele_torch_dev = NULL;
+static struct device_attribute dev_attr_tele_torch_level;
+//ITD:modify for tele flash by yingfei.li 20240313 end
+static int fl_set_current(struct flashlight_dev *fdev, int duty_current)
+{
+	struct flashlight_dev_arg fl_dev_arg;
+
+	if (!fdev || !fdev->ops) {
+		pr_info("Failed with no flashlight ops\n");
+		return -EINVAL;
+	}
+
+	/* ioctl */
+	fl_dev_arg.channel = fdev->dev_id.channel;
+	fl_dev_arg.arg = duty_current;
+	if (fdev->ops->flashlight_ioctl(FLASH_IOC_SET_CURRENT,
+				(unsigned long)&fl_dev_arg)) {
+		pr_err("Failed to set current\n");
+		return -EFAULT;
+	}
+
+	return 0;
+}
+
+static void sysfs_strobe_store(struct device *dev,int index, int input)
+{
+	struct flashlight_dev *fdev, *fdev_warm;
+	int ret = 0;
+	struct flashlight_dev_arg fl_dev_arg;
+	int tele_flag = 1;
+
+	envp[1] = NULL;
+
+	if(700<=input && input<900){//for debug
+		if(700<=input && input<750){//set gc8034 vcamd
+			sysfs_debug = input - 700;
+		}else if(800<=input && input<850){//skip main2 clk
+			skip_main2_clk = input - 800;
+		}
+		return;
+	}
+	pr_info("sysfs_strobe_store index = %d device_num = %d input=%d g_sysfs_inited[index]=%d\n", index, flashlight_device_num,input,g_sysfs_inited[index]);
+	if (index > flashlight_device_num){
+		index = flashlight_device_num;
+	}
+
+	if(g_project_current_config[index].sysui_torch[0] < 0)return;
+
+//	mutex_lock(&fl_mutex);
+	//ITD:modify for tele flash by yingfei.li 20240313 start
+	if(index == 0){
+		tele_flag = 0;
+	}else{
+		tele_flag = 1;
+	}
+	if(index == 2){
+		fdev = flashlight_find_dev_by_channel(0,1,index);
+	}else
+	{
+		fdev = flashlight_find_dev_by_index(
+				flashlight_get_type_index(index + 1),
+				flashlight_get_ct_index(1));
+	}
+	//ITD:modify for tele flash by yingfei.li 20240313 end
+	if (!fdev || !fdev->ops) {
+		pr_info("Failed with no flashlight ops\n");
+		mutex_unlock(&fl_mutex);
+		return;
+	}
+	fl_dev_arg.channel = fdev->dev_id.channel;
+	if((g_sysfs_inited[index] == 0) && input != 0 ){
+		fdev->ops->flashlight_set_driver(1);
+		fl_dev_arg.arg = FLASHLIGHT_SCENARIO_CAMERA|FLASHLIGHT_SCENARIO_DECOUPLE|FLASHLIGHT_SCENARIO_KEEPSTATE_COUPLE;
+		fdev->ops->flashlight_ioctl(
+			FLASH_IOC_SET_SCENARIO,
+			(unsigned long)&fl_dev_arg);
+		//ITD:add for factory test by fei.wu5 20251230 start
+		fdev->ops->flashlight_ioctl(FLASH_IOC_GET_HW_FAULT,
+			(unsigned long)&fl_dev_arg);
+		//ITD:add for factory test by fei.wu5 20251230 end
+		fl_dev_arg.arg = 0;
+		fdev->ops->flashlight_ioctl(
+			FLASH_IOC_SET_TIME_OUT_TIME_MS,
+			(unsigned long)&fl_dev_arg);
+		g_sysfs_inited[index] = 1;
+		g_device[index] = dev;
+		SysUITorchMode = 1;
+	}
+	if(0==input){//strobe closed
+		if(g_sysfs_inited[index] == 1){//use space maybe send 0 frequently,we should protect hardware
+			ret = fl_enable(fdev, 0);
+			fdev_warm = flashlight_find_dev_by_full_index(index, 1, 0);
+			if (fdev_warm && fdev_warm->ops && tele_flag) {
+				ret = fl_enable(fdev_warm, 0);
+			}
+			fl_dev_arg.arg = FLASHLIGHT_SCENARIO_FLASHLIGHT|FLASHLIGHT_SCENARIO_DECOUPLE|FLASHLIGHT_SCENARIO_KEEPSTATE_COUPLE;
+			fdev->ops->flashlight_ioctl(
+				FLASH_IOC_SET_SCENARIO,
+				(unsigned long)&fl_dev_arg);
+			fl_dev_arg.arg = -1;
+			fdev->ops->flashlight_ioctl(FLASH_IOC_GET_HW_FAULT,
+			    (unsigned long)&fl_dev_arg);
+			fdev->fault = fl_dev_arg.arg;
+			fdev->ops->flashlight_set_driver(0);
+			g_sysfs_inited[index] = 0;
+		}
+		envp[0] = "TORCH=OFF";
+//ITD: add flash call by yingji.wang 20230110 start
+			first_flash = 0;
+			temp_flash2 = 0;
+//ITD: add flash call by yingji.wang 20230110 end
+		SysUITorchMode = 0;
+		tran_vdcall_flag = 0;
+	}else if(1==input){//factory torch mode test, systemUI low1 torch
+		fl_set_current(fdev, g_project_current_config[index].sysui_torch[0]);
+		ret = fl_enable(fdev, 1);
+			fdev_warm = flashlight_find_dev_by_full_index(index, 1, 0);
+			if (fdev_warm && fdev_warm->ops && tele_flag) {
+				fl_set_current(fdev_warm, g_project_current_config[index].sysui_torch[0]);
+				ret = fl_enable(fdev_warm, 1);
+			}
+		envp[0] = "TORCH=LOW1";
+	}else if(2==input){//systemUI low2 torch,higher than low1
+		fl_set_current(fdev, g_project_current_config[index].sysui_torch[1]);
+		ret = fl_enable(fdev, 1);
+		envp[0] = "TORCH=LOW2";
+	}else if(3==input){//ITD: add flash call by yingji.wang 20230110 end
+		if(led_flag == 0){
+			ret = fl_set_current(fdev,flash_call_current2[temp_flash2]);
+			if(temp_flash2 >= 4 )
+				led_flag = 1;
+			else
+				temp_flash2++;
+		}else{
+			ret = fl_set_current(fdev,flash_call_current2[temp_flash2]);
+			if(temp_flash2 <= 0)
+				led_flag = 0;
+			else
+				temp_flash2--;
+		}
+		if(first_flash == 0 && ret != -1)
+		{
+			ret = fl_enable(fdev, 1);
+			first_flash = 1;
+		}
+		envp[0] = "TORCH=LOW2";
+//ITD: add flash call by yingji.wang 20230110 end
+	}else if(9==input){//factory flash mode test
+		fl_dev_arg.arg = 350;
+		fdev->ops->flashlight_ioctl(
+			FLASH_IOC_SET_TIME_OUT_TIME_MS,
+			(unsigned long)&fl_dev_arg);
+		fl_set_current(fdev, g_project_current_config[index].fac_flash);
+			fdev_warm = flashlight_find_dev_by_full_index(index, 1, 0);
+			if (fdev_warm && fdev_warm->ops && tele_flag) {
+				fl_dev_arg.channel = fdev_warm->dev_id.channel;
+				fdev_warm->ops->flashlight_ioctl(FLASH_IOC_SET_TIME_OUT_TIME_MS, (unsigned long)&fl_dev_arg);
+				fl_set_current(fdev_warm, g_project_current_config[index].fac_flash);
+				ret = fl_enable(fdev_warm, 1);
+				fl_dev_arg.arg = 0;
+				fdev_warm->ops->flashlight_ioctl(FLASH_IOC_SET_TIME_OUT_TIME_MS, (unsigned long)&fl_dev_arg);
+				fl_dev_arg.channel = fdev->dev_id.channel;
+			}
+		ret = fl_enable(fdev, 1);
+		envp[0] = "TORCH=FLASH";
+		//Set to 0 (Dream: is it need?)
+		fl_dev_arg.arg = 0;
+		fdev->ops->flashlight_ioctl(
+			FLASH_IOC_SET_TIME_OUT_TIME_MS,
+			(unsigned long)&fl_dev_arg);
+	}else if(10==input){//face id torch
+		fl_set_current(fdev, g_project_current_config[index].faceid_torch);
+		ret = fl_enable(fdev, 1);
+		envp[0] = "TORCH=FACEID";
+	}else if(11==input){//360 torch, open rear and front strobe
+		fl_dev_arg.arg = FLASHLIGHT_SCENARIO_CAMERA|FLASHLIGHT_SCENARIO_COUPLE|FLASHLIGHT_SCENARIO_KEEPSTATE_DECOUPLE;
+		fdev->ops->flashlight_ioctl(
+			FLASH_IOC_SET_SCENARIO,
+			(unsigned long)&fl_dev_arg);
+		fl_set_current(fdev, g_project_current_config[index].torch_360);
+		ret = fl_enable(fdev, 1);
+		envp[0] = "TORCH=ALLON";
+	}else if(100==input){//phone call reminder,just remind, as low as possible
+		fl_set_current(fdev, g_project_current_config[index].phonecall);
+		ret = fl_enable(fdev, 1);
+		envp[0] = "TORCH=PHCALL";
+	}else if(100<input && input<=120){//video call, as smooth as possible
+		//(120-101)/(31-1) = (x-101)/(y-1)
+		fl_set_current(fdev,g_project_current_config[index].torch_duty_range[0] + (input-101)*(g_project_current_config[index].torch_duty_range[1] - g_project_current_config[index].torch_duty_range[0])/(120-101));
+		ret = fl_enable(fdev, 1);
+		tran_vdcall_flag = 1;
+		envp[0] = "TORCH=VDCALL";
+	}else if(500<=input && input<550){//test lux by duty
+		int input_duty = input - 500;
+		fl_set_level(fdev, input_duty);
+		ret = fl_enable(fdev, 1);
+	}else if(1000<=input && input<3000){//test lux by current
+		int input_current = input - 1000;
+		fl_set_current(fdev,input_current);
+		ret = fl_enable(fdev, 1);
+	}else{
+		ret = fl_enable(fdev, 0);
+		fl_dev_arg.arg = FLASHLIGHT_SCENARIO_FLASHLIGHT|FLASHLIGHT_SCENARIO_COUPLE;
+		fdev->ops->flashlight_ioctl(
+			FLASH_IOC_SET_SCENARIO,
+			(unsigned long)&fl_dev_arg);
+		fdev->ops->flashlight_set_driver(0);
+		g_sysfs_inited[index] = 0;
+		envp[0] = "TORCH=OFF";
+		SysUITorchMode = 0;
+	}
+
+	g_sysfs_strobe_level[index] = input;
+	envp[1] = NULL;
+	kobject_uevent_env(&dev->kobj, KOBJ_CHANGE, envp);
+	PR_INFO(debug_mask,"[sysfs_strobe]g_sysfs_strobe_level[%d](%d):%d\n",index,g_sysfs_strobe_level[index],ret);
+//	mutex_unlock(&fl_mutex);
+}
+
+static ssize_t torch_level_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	pr_debug("[sysfs_main]show:%d\n",g_sysfs_strobe_level[0]);
+	return sprintf(buf, "%u\n", g_sysfs_strobe_level[0]);
+}
+
+static ssize_t torch_level_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t size)
+{
+	unsigned int  mode = 0;
+	mutex_lock(&fl_mutex);
+	sscanf(buf, "%d",&mode);
+	pr_debug("[sysfs_main]store:%d\n",mode);
+	sysfs_strobe_store(dev,0,mode);
+	mutex_unlock(&fl_mutex);
+	return size;
+}
+
+static DEVICE_ATTR_RW(torch_level);
+
+static ssize_t sub_torch_level_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	pr_debug("[sysfs_sub]show:%d \n", g_sysfs_strobe_level[1]);
+	return sprintf(buf, "%u\n", g_sysfs_strobe_level[1]);
+}
+
+static ssize_t sub_torch_level_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t size)
+{
+	unsigned int  mode = 0;
+	mutex_lock(&fl_mutex);
+	sscanf(buf, "%d", &mode);
+	pr_debug("[sysfs_sub]store:%d\n",mode);
+	sysfs_strobe_store(dev, 1, mode);
+	mutex_unlock(&fl_mutex);
+	return size;
+}
+
+static DEVICE_ATTR_RW(sub_torch_level);
+//ITD:modify for tele flash by yingfei.li 20240313 start
+static ssize_t tele_torch_level_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	pr_debug("[sysfs_tele]show:%d \n", g_sysfs_strobe_level[2]);
+	return sprintf(buf, "%u\n", g_sysfs_strobe_level[2]);
+}
+
+static ssize_t tele_torch_level_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t size)
+{
+	unsigned int  input = 0;
+	mutex_lock(&fl_mutex);
+	sscanf(buf, "%d", &input);
+	pr_debug("[sysfs_tele]store:%d\n",input);
+	sysfs_strobe_store(dev, 2, input);
+	mutex_unlock(&fl_mutex);
+	return size;
+}
+static DEVICE_ATTR_RW(tele_torch_level);
+//ITD:modify for tele flash by yingfei.li 20240313 end
+//ITD: Modify Flashlight Drv By Jesse 220405 end
+/******************************************************************************
+ * Platform device and driver
+ *****************************************************************************/
+static struct class *flashlight_class;
+static struct device *flashlight_device;
+static dev_t flashlight_devno;
+static struct cdev *flashlight_cdev;
+
+static int fl_init(void)
+{
+	return 0;
+}
+
+static int fl_uninit(void)
+{
+	struct flashlight_dev *fdev, *n;
+
+	mutex_lock(&fl_mutex);
+	list_for_each_entry_safe(fdev, n, &flashlight_list, node) {
+		/* uninit device */
+		if (fdev->ops) {
+			fdev->ops->flashlight_open();
+			fdev->ops->flashlight_set_driver(1);
+			fl_enable(fdev, 0);
+			fdev->ops->flashlight_set_driver(0);
+			fdev->ops->flashlight_release();
+		}
+
+		/* clear node and free memory */
+		list_del(&fdev->node);
+		kfree(fdev);
+	}
+	mutex_unlock(&fl_mutex);
+
+	return 0;
+}
+
+static int fl_parse_dt(struct device *dev)
+{
+	#ifdef CONFIG_MTK_FLASHLIGHT_PT
+	struct device_node *np;
+
+	if (!dev || !dev->of_node)
+		return -ENODEV;
+	
+	np = dev->of_node;
+	if (of_property_read_u32(np, "low-battery-level", &pt_low_bat_level))
+		pr_info("Parse no dt, low-battery-level.\n");
+	if (of_property_read_u32(np, "battery-percent-level", &pt_bat_pc_level))
+		pr_info("Parse no dt, battert-percent-level.\n");
+	if (of_property_read_u32(np, "battery-oc-level", &pt_bat_oc_level))
+		pr_info("Parse no dt, battert-oc-level.\n");
+
+	pr_info("Parse dt pt=(%u,%u,%u).\n",
+		pt_low_bat_level, pt_bat_pc_level, pt_bat_oc_level);
+	#endif
+
+	return 0;
+}
+
+static int flashlight_probe(struct platform_device *pdev)
+{
+#if IS_ENABLED(CONFIG_MTK_FLASHLIGHT_THERMAL)
+	struct flashlight_cooling_device *flash_cdev;
+	int ret;
+#endif
+//ITD: Modify Flashlight Drv By fei.wu5 260127 Start
+	int rlt;
+	pr_debug("Probe start\n");
+
+    rlt = flash_config_init(&pdev->dev);
+    if (rlt) {
+        pr_info("Failed to init flash config\n");
+        return rlt;
+    }
+//ITD: Modify Flashlight Drv By fei.wu5 260127 end
+#if IS_ENABLED(CONFIG_MTK_FLASHLIGHT_THERMAL)
+	flash_cdev = devm_kzalloc(&pdev->dev, sizeof(*flash_cdev), GFP_KERNEL);
+	if (flash_cdev == NULL)
+		return -ENOMEM;
+
+	ret = snprintf(flash_cdev->name, sizeof(flash_cdev->name), "%s", "flashlight_cooler");
+	if (ret < 0 || ret >= sizeof(flash_cdev->name))
+		return -EINVAL;
+
+	flash_cdev->max_state = FLASHLIGHT_COOLER_MAX_STATE;
+	flash_cdev->target_state = 0;
+
+	flash_cdev->cdev = thermal_of_cooling_device_register(pdev->dev.of_node,
+			flash_cdev->name, flash_cdev, &flashlight_cooling_ops);
+	if (IS_ERR(flash_cdev->cdev))
+		pr_info("register thermal failed\n");
+
+	platform_set_drvdata(pdev, flash_cdev);
+#endif
+	/* allocate char device number */
+	if (alloc_chrdev_region(&flashlight_devno, 0, 1, FLASHLIGHT_DEVNAME)) {
+		pr_info("Failed to allocate char device region\n");
+		goto err_allocate_chrdev;
+	}
+	pr_debug("Allocate major number and minor number: (%d, %d)\n",
+			MAJOR(flashlight_devno),
+			MINOR(flashlight_devno));
+
+	/* allocate char device */
+	flashlight_cdev = cdev_alloc();
+	if (!flashlight_cdev) {
+		pr_info("Failed to allcoate cdev\n");
+		goto err_allocate_cdev;
+	}
+	flashlight_cdev->ops = &flashlight_fops;
+	flashlight_cdev->owner = THIS_MODULE;
+
+	/* add char device to the system */
+	if (cdev_add(flashlight_cdev, flashlight_devno, 1)) {
+		pr_info("Failed to add cdev\n");
+		goto err_add_cdev;
+	}
+
+	/* create class */
+	flashlight_class = class_create(FLASHLIGHT_CORE);
+	if (IS_ERR(flashlight_class)) {
+		pr_info("Failed to create class (%d)\n",
+				(int)PTR_ERR(flashlight_class));
+		goto err_create_class;
+	}
+
+	/* create device */
+	flashlight_device =
+	    device_create(flashlight_class, NULL, flashlight_devno,
+				NULL, FLASHLIGHT_DEVNAME);
+	if (!flashlight_device) {
+		pr_info("Failed to create device\n");
+		goto err_create_device;
+	}
+
+	/* create device file */
+	if (device_create_file(flashlight_device,
+				&dev_attr_flashlight_strobe)) {
+		pr_info("Failed to create device file(strobe)\n");
+		goto err_create_strobe_device_file;
+	}
+	if (device_create_file(flashlight_device,
+				&dev_attr_flashlight_pt)) {
+		pr_info("Failed to create device file(pt)\n");
+		goto err_create_pt_device_file;
+	}
+	if (device_create_file(flashlight_device,
+				&dev_attr_flashlight_charger)) {
+		pr_info("Failed to create device file(charger)\n");
+		goto err_create_charger_device_file;
+	}
+	if (device_create_file(flashlight_device,
+				&dev_attr_flashlight_capability)) {
+		pr_info("Failed to create device file(capability)\n");
+		goto err_create_capability_device_file;
+	}
+	if (device_create_file(flashlight_device,
+				&dev_attr_flashlight_current)) {
+		pr_info("Failed to create device file(current)\n");
+		goto err_create_current_device_file;
+	}
+	if (device_create_file(flashlight_device, &dev_attr_flashlight_fault)) {
+		pr_info("Failed to create device file(fault)\n");
+		goto err_create_fault_device_file;
+	}
+	if (device_create_file(flashlight_device,
+				&dev_attr_flashlight_sw_disable)) {
+		pr_info("Failed to create device file(sw_disable)\n");
+		goto err_create_sw_disable_device_file;
+	}
+	if (device_create_file(flashlight_device,
+				&dev_attr_flashlight_torch)) {
+		pr_info("Failed to create device file(torch)\n");
+		goto err_create_torch_device_file;
+	}
+
+	fl_parse_dt(&pdev->dev);
+
+	/* init flashlight */
+	fl_init();
+//ITD: Modify Flashlight Drv By Jesse 220405 Start
+	torch_class = class_create("torch");
+	if (IS_ERR(torch_class)) {
+		pr_info("[sysfs_main]Failed to create class (%d)\n",
+				(int)PTR_ERR(torch_class));
+	} else {
+		torch_dev = device_create(torch_class, NULL, 0, 0,"torch");
+		if(NULL == torch_dev) {
+			pr_info("[sysfs_main]device_create fail\n");
+			class_destroy(torch_class);
+		} else {
+			if (device_create_file(torch_dev, &dev_attr_torch_level)){
+				pr_info("[sysfs_main]create device file(torch)\n");
+				device_remove_file(torch_dev, &dev_attr_torch_level);
+				class_destroy(torch_class);
+			} else {
+				g_device[0] = torch_dev;
+			}
+		}
+	}
+
+	sub_torch_class = class_create("sub_torch");
+	if (IS_ERR(sub_torch_class)) {
+		pr_info("[sysfs_sub]Failed to create class (%d)\n",
+				(int)PTR_ERR(sub_torch_class));
+	} else {
+		sub_torch_dev = device_create(sub_torch_class, NULL, 0, 0,"sub_torch");
+		if(NULL == sub_torch_dev) {
+			pr_info("[sysfs_sub]device_create fail\n");
+			class_destroy(torch_class);
+		} else {
+			if (device_create_file(sub_torch_dev, &dev_attr_sub_torch_level)){
+				pr_info("[sysfs_sub]create device file(torch)\n");
+				device_remove_file(torch_dev, &dev_attr_torch_level);
+				class_destroy(torch_class);
+			} else {
+				g_device[1] = sub_torch_dev;
+			}
+		}
+	}
+	//ITD:modify for tele flash by yingfei.li 20240313 start
+	tele_torch_class = class_create("tele_torch");
+	if (IS_ERR(tele_torch_class)) {
+		pr_info("[sysfs_tele]Failed to create class (%d)\n",
+				(int)PTR_ERR(tele_torch_class));
+	} else {
+		tele_torch_dev = device_create(tele_torch_class, NULL, 0, 0,"tele_torch");
+		if(NULL == tele_torch_dev) {
+			pr_info("[sysfs_tele]device_create fail\n");
+			class_destroy(torch_class);
+		} else {
+			if (device_create_file(tele_torch_dev, &dev_attr_tele_torch_level)){
+				pr_info("[sysfs_tele]create device file(torch)\n");
+				device_remove_file(torch_dev, &dev_attr_torch_level);
+				class_destroy(torch_class);
+			} else {
+				g_device[2] = tele_torch_dev;
+			}
+		}
+	}
+	//ITD:modify for tele flash by yingfei.li 20240313 end
+
+#ifdef CONFIG_TRAN_FLASHLIGHT_THERMAL_CONTROL
+	/* init work queue */
+	INIT_WORK(&thermal_work, thermal_work_polling);
+	/* init timer */
+	hrtimer_init(&thermal_timer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
+	thermal_timer.function = thermal_timer_func;
+#endif
+//ITD: Modify Flashlight Drv By Jesse 220405 End
+
+	pr_debug("Probe done\n");
+
+	return 0;
+
+err_create_torch_device_file:
+	device_remove_file(flashlight_device, &dev_attr_flashlight_torch);
+err_create_sw_disable_device_file:
+	device_remove_file(flashlight_device, &dev_attr_flashlight_sw_disable);
+err_create_fault_device_file:
+	device_remove_file(flashlight_device, &dev_attr_flashlight_fault);
+err_create_current_device_file:
+	device_remove_file(flashlight_device, &dev_attr_flashlight_capability);
+err_create_capability_device_file:
+	device_remove_file(flashlight_device, &dev_attr_flashlight_charger);
+err_create_charger_device_file:
+	device_remove_file(flashlight_device, &dev_attr_flashlight_pt);
+err_create_pt_device_file:
+	device_remove_file(flashlight_device, &dev_attr_flashlight_strobe);
+err_create_strobe_device_file:
+	device_destroy(flashlight_class, flashlight_devno);
+err_create_device:
+	class_destroy(flashlight_class);
+err_create_class:
+err_add_cdev:
+	cdev_del(flashlight_cdev);
+err_allocate_cdev:
+	unregister_chrdev_region(flashlight_devno, 1);
+err_allocate_chrdev:
+	return -1;
+}
+
+static void flashlight_remove(struct platform_device *pdev)
+{
+#if IS_ENABLED(CONFIG_MTK_FLASHLIGHT_THERMAL)
+	struct flashlight_cooling_device *f_cdev;
+#endif
+	fl_uninit();
+
+#if IS_ENABLED(CONFIG_MTK_FLASHLIGHT_THERMAL)
+	f_cdev = (struct flashlight_cooling_device *)platform_get_drvdata(pdev);
+	thermal_cooling_device_unregister(f_cdev->cdev);
+#endif
+	/* remove device file */
+	device_remove_file(flashlight_device, &dev_attr_flashlight_torch);
+	device_remove_file(flashlight_device, &dev_attr_flashlight_sw_disable);
+	device_remove_file(flashlight_device, &dev_attr_flashlight_fault);
+	device_remove_file(flashlight_device, &dev_attr_flashlight_current);
+	device_remove_file(flashlight_device, &dev_attr_flashlight_capability);
+	device_remove_file(flashlight_device, &dev_attr_flashlight_charger);
+	device_remove_file(flashlight_device, &dev_attr_flashlight_pt);
+	device_remove_file(flashlight_device, &dev_attr_flashlight_strobe);
+	/* remove device */
+	device_destroy(flashlight_class, flashlight_devno);
+	/* remove class */
+	class_destroy(flashlight_class);
+	/* remove char device */
+	cdev_del(flashlight_cdev);
+	/* unregister char device number */
+	unregister_chrdev_region(flashlight_devno, 1);
+	//ITD: Modify Flashlight Drv By Jesse 220405 Start
+	//ITD:modify for tele flash by yingfei.li 20240313 start
+	device_remove_file(tele_torch_dev, &dev_attr_tele_torch_level);
+	device_unregister(tele_torch_dev);
+	if(tele_torch_class != NULL) {
+		class_destroy(tele_torch_class);
+	}
+    //ITD:modify for tele flash by yingfei.li 20240313 end
+	device_remove_file(sub_torch_dev, &dev_attr_sub_torch_level);
+	device_unregister(sub_torch_dev);
+	if(sub_torch_class != NULL) {
+		class_destroy(sub_torch_class);
+	}
+
+	device_remove_file(torch_dev, &dev_attr_torch_level);
+	device_unregister(torch_dev);
+	if(torch_class!=NULL) {
+		class_destroy(torch_class);
+	}
+
+#ifdef CONFIG_TRAN_FLASHLIGHT_THERMAL_CONTROL
+	/* flush work queue */
+	flush_work(&thermal_work);
+#endif
+//ITD: Modify Flashlight Drv By Jesse 220405 End
+
+	return ;
+}
+
+static void flashlight_shutdown(struct platform_device *pdev)
+{
+	struct flashlight_dev *fdev, *n;
+
+	mutex_lock(&fl_mutex);
+	list_for_each_entry_safe(fdev, n, &flashlight_list, node) {
+		/* clear node and free memory */
+		list_del(&fdev->node);
+		kfree(fdev);
+	}
+//ITD:modify for shutdown to close hrtimer by renzhi.li 20240827 start
+#ifdef CONFIG_TRAN_FLASHLIGHT_THERMAL_CONTROL
+	hrtimer_cancel(&thermal_timer);
+#endif
+//ITD:modify for shutdown to close hrtimer by renzhi.li 20240827 end
+	mutex_unlock(&fl_mutex);
+
+}
+
+#ifdef CONFIG_OF
+static const struct of_device_id flashlight_of_match[] = {
+	{.compatible = "mediatek,flashlight_core"},
+	{},
+};
+MODULE_DEVICE_TABLE(of, flashlight_of_match);
+#else
+static struct platform_device flashlight_platform_device[] = {
+	{
+		.name = FLASHLIGHT_DEVNAME,
+		.id = 0,
+		.dev = {}
+	},
+	{}
+};
+MODULE_DEVICE_TABLE(platform, flashlight_platform_device);
+#endif
+
+static struct platform_driver flashlight_platform_driver = {
+	.probe = flashlight_probe,
+	.remove = flashlight_remove,
+	.shutdown = flashlight_shutdown,
+	.driver = {
+		   .name = FLASHLIGHT_DEVNAME,
+		   .owner = THIS_MODULE,
+#ifdef CONFIG_OF
+		   .of_match_table = flashlight_of_match,
+#endif
+	},
+};
+
+static int __init flashlight_init(void)
+{
+	int ret;
+
+	pr_debug("Init start\n");
+
+#ifndef CONFIG_OF
+	ret = platform_device_register(&flashlight_platform_device);
+	if (ret) {
+		pr_info("Failed to register platform device\n");
+		return ret;
+	}
+#endif
+
+	ret = platform_driver_register(&flashlight_platform_driver);
+	if (ret) {
+		pr_info("Failed to register platform driver\n");
+		return ret;
+	}
+
+#ifdef CONFIG_MTK_FLASHLIGHT_PT
+	register_low_battery_notify(
+			&pt_low_vol_callback, LOW_BATTERY_PRIO_FLASHLIGHT, NULL);
+	register_bp_thl_notify(
+			&pt_low_bat_callback, BATTERY_PERCENT_PRIO_FLASHLIGHT);
+	register_battery_oc_notify(
+			&pt_oc_callback, BATTERY_OC_PRIO_FLASHLIGHT, NULL);
+#endif
+
+	pr_debug("Init done\n");
+
+	return 0;
+}
+
+static void __exit flashlight_exit(void)
+{
+	pr_debug("Exit start\n");
+
+	platform_driver_unregister(&flashlight_platform_driver);
+
+	pr_debug("Exit done\n");
+}
+
+module_init(flashlight_init);
+module_exit(flashlight_exit);
+
+MODULE_LICENSE("GPL");
+MODULE_AUTHOR("Simon Wang <Simon-TCH.Wang@mediatek.com>");
+MODULE_DESCRIPTION("MTK Flashlight Core Driver");
+

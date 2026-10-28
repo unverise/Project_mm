@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: GPL-2.0-only
+#
+# Touchscreen driver configuration
+#
+
+#USD: add for tp by hai.tang5 20260128 start
+# vendor
+source "$(KCONFIG_EXT_PREFIX)drivers/input/touchscreen/transsion/vendor/Kconfig"
+#USD: add for tp by hai.tang5 20260128 end

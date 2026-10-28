@@ -1,0 +1,9 @@
+config MTK_VIRT_ADSP
+	tristate "Mediatek Auto Virtio ADSP Device"
+	bool "Support virtio adsp  mode"
+	depends on SND_VIRTIO
+	help
+	  This is MTK virt adsp driver.
+	  Say Y if you would like to enable virt adsp,
+	  If unsure, say N.
+	  The auto product with hypervisor guest os use virtio adsp device.

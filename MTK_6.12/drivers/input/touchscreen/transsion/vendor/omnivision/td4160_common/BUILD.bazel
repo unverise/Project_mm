@@ -1,0 +1,52 @@
+load("//build/bazel_mgk_rules:mgk_ddk_ko.bzl", "define_mgk_ddk_ko")
+load("//build/kernel/kleaf:kernel.bzl", "ddk_headers")
+load("@mgk_info//:kernel_version.bzl","kernel_version",)
+
+package(
+    default_visibility = [
+        "//visibility:public",
+    ],
+)
+
+filegroup(
+	name = "srcs",
+	srcs = glob([
+		"**/*.c",
+	]),
+)
+define_mgk_ddk_ko(
+    name = "omnivision_td4160",
+    srcs = [
+        "omnivision_transsion.c",
+        "omnivision_tcm_core.c",
+        "omnivision_tcm_csv_parser.c",
+        "omnivision_tcm_device.c",
+        "omnivision_tcm_diagnostics.c",
+        "omnivision_tcm_recovery.c",
+        "omnivision_tcm_reflash.c",
+        "omnivision_tcm_spi.c",
+        "omnivision_tcm_testing.c",
+        "omnivision_tcm_touch.c",
+        "omnivision_tcm_zeroflash.c",
+    ],
+    hdrs = glob(["**/*.h"]),
+    includes = ["include"],
+    copts = [
+        "-Wall",
+        "-Werror",
+        "-I$(DEVICE_MODULES_PATH)/drivers/input/touchscreen/transsion/core/include/",
+    ],
+    header_deps  = [
+	"//kernel_device_modules-{}/drivers/input/touchscreen/transsion/core:tp_core_header".format(kernel_version),
+    ],
+    ko_deps = [
+	"//kernel_device_modules-{}/drivers/input/touchscreen/transsion/core:adaptive-ts".format(kernel_version),
+    ],
+)
+
+filegroup(
+    name = "ddk_kconfigs",
+    srcs = glob([
+        "**/Kconfig",
+    ]),
+)

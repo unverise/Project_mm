@@ -1,0 +1,54 @@
+#ifndef __LINUX_TC_TRANCARE_H__
+#define __LINUX_TC_TRANCARE_H__
+
+#include "tc_common_class.h"
+
+#define TRANCARE_UPLOAD_INTERVAL_S   (300)  /* 5min */
+
+enum tc_trancare_prop {
+	TRAN_TRANCARE_PROP_CAPACITY,
+	TRAN_TRANCARE_PROP_FG_BAT_CYCLE,
+	TRAN_TRANCARE_PROP_FG_BAT_HEALTH,
+	TRAN_TRANCARE_PROP_ENHANCE_MODE,
+	TRAN_TRANCARE_PROP_BAT_TEMP,
+	TRAN_TRANCARE_PROP_PCB_TEMP,
+	TRAN_TRANCARE_PROP_USB_TEMP,
+	TRAN_TRANCARE_PROP_PA_TEMP,
+	TRAN_TRANCARE_PROP_TA_TEMP,
+	TRAN_TRANCARE_PROP_CHG_TYPE,
+	TRAN_TRANCARE_PROP_RESERVE_CHG_TYPE,
+	TRAN_TRANCARE_PROP_CHG_STATUS,
+	TRAN_TRANCARE_PROP_CHGSPEED,
+	TRAN_TRANCARE_PROP_CHGSPEED_REAL,
+	TRAN_TRANCARE_PROP_CHGSPEED_OWNER,
+	TRAN_TRANCARE_PROP_BYPASS_EN,
+	TRAN_TRANCARE_PROP_WATER_DET,
+	TRAN_TRANCARE_PROP_AICHG_EN,
+	TRAN_TRANCARE_PROP_HIGH_TEMP_DISCHG,
+	TRAN_TRANCARE_PROP_LOW_TEMP_DISCHG,
+	TRAN_TRANCARE_PROP_R_CABLE,
+	TRAN_TRANCARE_PROP_TA_POWER,
+	TRAN_TRANCARE_PROP_PE50_LMT_MODULE,
+	TRAN_TRANCARE_PROP_WLS_TRAN_DEVICES,
+	TRAN_TRANCARE_PROP_SCREEN_ON,
+
+	TRAN_TRANCARE_PROP_MAX,
+};
+
+struct tc_trancare_info {
+	struct device *dev;
+	struct tran_device *tc_trancare_dev;
+	struct tran_device *tc_lcd;
+	struct tran_properties tc_trancare_props;
+	struct notifier_block tc_trancare_notifier;
+	bool screen_on;
+	struct mutex data_send_lock;
+};
+
+struct tc_trancare_data {
+	enum tc_trancare_prop prop;
+	char name[50];
+};
+
+extern int tc_upload_tranlog_chgic_check(void);
+#endif

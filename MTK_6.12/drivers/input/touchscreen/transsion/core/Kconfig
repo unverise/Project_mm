@@ -1,0 +1,8 @@
+#USD: add for tp drv by yun.luo start
+config TRAN_TOUCH_CORE
+    tristate "Transsion touch core"
+    help
+      Say Y here if you have a touch core project
+      If unsure, say N.
+#USD: add for tp drv by yun.luo end
+

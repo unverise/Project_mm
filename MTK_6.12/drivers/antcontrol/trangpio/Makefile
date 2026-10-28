@@ -1,0 +1,1 @@
+obj-$(CONFIG_TRAN_TRANGPIO) += trangpio.o

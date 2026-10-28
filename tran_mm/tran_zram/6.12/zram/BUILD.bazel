@@ -1,0 +1,109 @@
+load("//build/bazel_mgk_rules:mgk_ddk_ko.bzl", "define_mgk_ddk_ko")
+load("//build/kernel/kleaf:kernel.bzl", "ddk_headers")
+load("@mgk_info//:kernel_version.bzl", "kernel_version",)
+
+package(
+    default_visibility = [
+        "//visibility:public",
+    ],
+)
+filegroup(
+    name = "ddk_kconfigs",
+    srcs = glob([
+        "**/Kconfig",
+    ]),
+)
+filegroup(
+    name = "ddk_src",
+    srcs = glob([
+        "**/*.c",
+        "**/*.h",
+    ]),
+)
+
+ddk_headers(
+   name = "headers",
+   hdrs = [
+        "zram_drv.h",
+   ],
+   includes = ["."],
+   linux_includes = [
+       "include",
+   ],
+)
+
+define_mgk_ddk_ko(
+    name = "tran_zram",
+    srcs = [
+        "zram_drv.c",
+        "zcomp.c",
+        "zram_process_reclaim.c",
+        "backend_lz4.c",
+        "backend_lzo.c",
+        "backend_lzorle.c",
+        "backend_zstd.c",
+        "backend_deflate.c",
+        "backend_lz4hc.c",
+        "backend_wkdm.c",
+        "WKdmCompress.c",
+        "WKdmDecompress.c",
+        "eswap/memcg_control.c",
+        "eswap/memcg_reclaim.c",
+        "eswap/eswap_acct.c",
+        "eswap/eswap_area.c",
+        "eswap/eswap_core.c",
+        "eswap/eswap_ctrl.c",
+        "eswap/eswap_helper.c",
+        "eswap/eswap_list.c",
+        "eswap/eswap_lru_rmap.c",
+        "eswap/eswap_manager.c",
+        "eswap/eswap_schedule.c",
+        "eswap/eswap_stats.c",
+    ],
+    hdrs = glob([
+        "zram_drv.h",
+        "zcomp.h",
+        "WKdm.h",    
+        "zram_process_reclaim.h",
+        "backend_842.h",
+        "backend_deflate.h",
+        "backend_lz4.h",
+        "backend_lz4hc.h",
+        "backend_lzo.h",
+        "backend_lzorle.h",
+        "backend_zstd.h",
+        "backend_wkdm.h",
+        "eswap/memcg_control.h",
+        "eswap/memcg_estrack.h",
+        "eswap/eswap_acct.h",
+        "eswap/eswap_api.h",
+        "eswap/eswap_area.h",
+        "eswap/eswap_internal.h",
+        "eswap/eswap_list.h",
+        "eswap/eswap_lru_rmap.h",
+        "eswap/eswap_manager.h",
+        "eswap/eswap_schedule.h",
+        "**/*.h",
+    ]),
+    includes = ["."],
+    ko_deps = [
+        "//kernel_device_modules-{}/drivers/misc/tranlog:transsion_tranlog".format(kernel_version),
+	"//kernel_device_modules-{}/drivers/misc/mediatek/sched:scheduler".format(kernel_version),
+    ],
+    header_deps = [
+        "//kernel_device_modules-{}/drivers/misc/tranlog:headers".format(kernel_version),
+	"//kernel_device_modules-{}/drivers/misc/mediatek/sched:trans_sched_headers".format(kernel_version),
+        "//kernel_device_modules-{}/fs/atomic_storage/tran_block:headers".format(kernel_version),
+        "//kernel_device_modules-{}/fs/atomic_storage/tran_block/low_latency_sched:headers".format(kernel_version),
+	"//vendor/transsion/kernel_modules/uas:uas_headers",
+    ],
+    copts = [
+        "-I$(DEVICE_MODULES_PATH)/drivers/block/zram",
+        "-I$(srctree)/$(src)",
+        "-I$(DEVICE_MODULES_PATH)/include/linux",
+        "-I$(DEVICE_MODULES_PATH)/drivers/misc/tranlog",
+        "-I$(srctree)",
+	"-I$(DEVICE_MODULES_PATH)/../vendor/transsion/kernel_modules/uas/include"
+    ],
+)
+

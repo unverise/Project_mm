@@ -1,0 +1,12 @@
+#USD: add for tp drv by yun.luo start
+config TRAN_GT9916_SPI
+    tristate "Transsion gt9916 touch ic"
+    help
+      Say Y here if you have a gt9916 project
+      If unsure, say N.
+#USD: add for tp drv by yun.luo end
+config TOUCHSCREEN_GOODIX_BRL_SPI
+    tristate "CONFIG_TOUCHSCREEN_GOODIX_BRL_SPI"
+    help
+      Say Y here if you have a gt9916 project
+      If unsure, say N.

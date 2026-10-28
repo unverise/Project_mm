@@ -1,0 +1,13 @@
+obj-$(CONFIG_TMS_NFC_DEVICE) := tms_device_modules.o
+
+tms_nfc-y := tms_common.o \
+             debuger/debuger.o \
+             debuger/checker.o \
+             debuger/logger.o \
+             guidev/guide_driver.o \
+             nfc/nfc_common.o \
+             nfc/nfc_driver.o
+
+ifdef CONFIG_DYNAMIC_DEBUG
+ccflags-y += -DDYNAMIC_DEBUG_MODULE
+endif

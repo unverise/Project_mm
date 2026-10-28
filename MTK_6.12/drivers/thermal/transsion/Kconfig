@@ -1,0 +1,17 @@
+config TRAN_VTSHELL_THERMAL
+	tristate "virtual tshell driver for Mediatek"
+	depends on THERMAL_OF
+	default m
+	help
+	  Enable this option if you want to get virtual tshell temperature
+	  via vitrual tshell for Mediatek platforms.
+	  This driver collects other sensor temperature with coefficient to calculate
+	  virtual tshell temperatrure.
+
+config TRAN_THERMAL_INTERFACE
+	tristate "kernel interface for transsion thermal"
+	depends on TC_CLASS_SUPPORT
+	default m
+	help
+	  Enable this option if you want to get thermal feature
+	  via thermal interface for Mediatek platforms.

@@ -1,0 +1,7 @@
+config TRAN_LED_CORE_AW20144
+	tristate "LED Support for AW20144"
+	help
+	  this option enables support for the AW20144 RGB LED connected
+	  through I2C. Say Y to enable support for the AW20144 LED
+	  light automatically.
+

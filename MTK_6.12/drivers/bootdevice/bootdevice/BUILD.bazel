@@ -1,0 +1,74 @@
+load("//build/bazel_mgk_rules:mgk_ddk_ko.bzl", "define_mgk_ddk_ko")
+load("@mgk_info//:kernel_version.bzl", "kernel_version")
+load("//build/kernel/kleaf:kernel.bzl", "ddk_headers")
+
+package(
+    default_visibility = [
+        "//visibility:public",
+    ],
+)
+
+ddk_headers(
+	name = "headers",
+	hdrs = glob(["**/*.h"]),
+	includes = ["."],
+	linux_includes = [
+		"include",
+	],
+)
+
+filegroup(
+    name = "ddk_kconfigs",
+    srcs = glob([
+        "**/Kconfig",
+    ]),
+)
+
+filegroup(
+	name = "srcs",
+	srcs = glob([
+		"**/Makefile",
+		"**/Kbuild",
+		"**/*.c",
+		"**/*.h",
+	]),
+)
+
+define_mgk_ddk_ko(
+    name = "tran-proc-bootdevice-mod",
+    srcs = [
+        "tran-proc-bootdevice.c",
+		"tran-proc-mmc.c",
+		"tran-proc-ufs.c",
+    ],
+    hdrs = [
+	"tran-proc-bootdevice.h",
+	"tran-proc-mmc.h",
+	"tran-proc-ufs.h",
+    ],
+
+    includes = [
+        ".",  # 当前目录
+	"$(DEVICE_MODULES_PATH)/drivers/mmc/host",	
+	"$(DEVICE_MODULES_PATH)/drivers/ufs",
+    ],
+
+    header_deps = [
+    "//kernel_device_modules-{}/drivers/mmc/host:msdc_headers".format(kernel_version),
+	"//kernel_device_modules-{}/drivers/ufs:headers".format(kernel_version),
+    ],
+
+    copts = [  # 添加编译选项
+	"-I$(DEVICE_MODULES_PATH)/drivers/bootdevice/bootdevice",
+        "-I$(DEVICE_MODULES_PATH)/drivers/ufs/",
+        "-I$(DEVICE_MODULES_PATH)/drivers/mmc/host/",
+		"-I$(DEVICE_MODULES_PATH)/include/ufs/",
+	"-I$(srctree)/drivers/bootdevice/bootdevice/",
+        "-I$(srctree)/drivers/ufs/",
+        "-I$(srctree)/drivers/mmc/host/",
+        "-I$(srctree)/include/ufs/",
+    ],
+
+    out = "tran-proc-bootdevice-mod.ko",
+)
+

@@ -1,0 +1,19 @@
+config TRAN_PROC_BOOTDEVICE
+    tristate "TRAN proc bootdevice"
+    default m
+    help
+        create proc/bootdevice dir to record flash info
+
+
+config TRAN_PROC_UFS
+    bool "TRAN proc bootdevice for ufs"
+    default y if SCSI_UFSHCD != n
+    help
+        create proc/bootdevice dir to record flash info
+
+
+config TRAN_PROC_MMC
+    bool "TRAN proc bootdevice for mmc"
+    default y if !TRAN_PROC_UFS
+    help
+        create proc/bootdevice dir to record flash info

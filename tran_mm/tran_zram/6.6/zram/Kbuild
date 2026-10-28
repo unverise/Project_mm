@@ -1,0 +1,34 @@
+
+tran_zram-y     :=      zram_process_reclaim.o zcomp.o zram_drv.o
+
+obj-$(CONFIG_ZRAM)      +=      tran_zram.o
+
+ccflags-y += -I$(DEVICE_MODULES_PATH)/drivers/misc/tranlog/
+ccflags-y += -I$(srctree)/
+ccflags-y += -I$(DEVICE_MODULES_PATH)/drivers/misc/mediatek/sched/trans_sched
+ccflags-y += -I$(srctree)/../vendor/transsion/kernel_modules/uas/include
+
+ifneq ($(CONFIG_TRANSSION_BLK),)
+ifeq ($(CONFIG_TRANSSION_BLK),$(filter $(CONFIG_TRANSSION_BLK),y m))
+ccflags-y += -I$(DEVICE_MODULES_PATH)/fs/atomic_storage/tran_block/low_latency_sched/include/
+endif
+endif
+
+tran_zram-$(CONFIG_ESWAP) += eswap/eswap_core.o
+tran_zram-$(CONFIG_ESWAP) += eswap/eswap_manager.o
+tran_zram-$(CONFIG_ESWAP) += eswap/eswap_schedule.o
+tran_zram-$(CONFIG_ESWAP) += eswap/eswap_list.o
+tran_zram-$(CONFIG_ESWAP) += eswap/eswap_area.o
+tran_zram-$(CONFIG_ESWAP) += eswap/eswap_acct.o
+tran_zram-$(CONFIG_ESWAP) += eswap/eswap_stats.o
+tran_zram-$(CONFIG_ESWAP) += eswap/eswap_ctrl.o
+tran_zram-$(CONFIG_ESWAP) += eswap/eswap_lru_rmap.o
+tran_zram-$(CONFIG_ESWAP) += eswap/eswap_helper.o
+tran_zram-$(CONFIG_TRAN_MEMCG_COMPRESS_SUPPORT) += eswap/memcg_reclaim.o
+tran_zram-$(CONFIG_ZRAM_MULTI_COMP) += backend_wkdm.o WKdmCompress.o WKdmDecompress.o
+
+ifeq ($(CONFIG_ESWAP),y)
+	tran_zram-y += eswap/memcg_control.o
+else ifeq ($(CONFIG_TRAN_MEMCG_COMPRESS_SUPPORT),y)
+	tran_zram-y += eswap/memcg_control.o
+endif

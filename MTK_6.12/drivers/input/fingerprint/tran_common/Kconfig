@@ -1,0 +1,56 @@
+menuconfig TRAN_FINGERPRINT_LEGACY
+	tristate "transsion class series devices"
+	default y
+
+if TRAN_FINGERPRINT_LEGACY
+
+config TRAN_FP_DRV_MODE_SPI
+	bool "specify fingerprint driver type --- SPI mode"
+	default y
+	help
+		support for spi mode fingerprint driver
+
+config TRAN_CHIP_PLAT
+	string "which chip platform"
+	default "MTK"
+	help
+		in which chip platform
+
+config TRAN_FP_POWER_CTRL_REGULATOR
+	bool "transsion fp power controlled by regulator"
+	default n
+	help
+		support for transsion fp power control by regulator
+
+config TRAN_FP_POWER_CTRL_GPIO
+	bool "transsion fp power controlled by gpio"
+	default n
+	help
+		support for transsion fp power control by gpio
+config TRAN_FP_VENDOR
+	string "which vendor does transsion fp support?"
+	default "sunwave"
+	help
+		support for transsion fp vendor control
+config TRAN_FP_LOG_LVL
+	string "which log level does transsion fp support?"
+	default "DEBUG"
+	help
+		support for transsion fp log output control
+config TRAN_FP_ANDROID_VERSION
+	string "finger android version"
+	default "android_s"
+	help
+		finger android version
+config TRAN_FP_TEE_VERSION
+    string "finger TEE version"
+    default "500"
+    help
+        finger_trustonic_version
+config TRAN_LHBM_NOTIFY_FINGERPRINT
+        tristate "enable hbm state notify fingerprint"
+        help
+          For fingerprint under the screen projects.
+          You need add CONFIG_TRAN_LHBM_NOTIFY_FINGERPRINT=m to tran_custom.config file.
+endif
+

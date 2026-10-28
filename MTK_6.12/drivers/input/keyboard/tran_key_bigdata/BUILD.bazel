@@ -1,0 +1,42 @@
+load("//build/bazel_mgk_rules:mgk_ddk_ko.bzl", "define_mgk_ddk_ko")
+load("//build/kernel/kleaf:kernel.bzl", "ddk_headers")
+load("@mgk_info//:kernel_version.bzl", "kernel_version")
+
+package(
+    default_visibility = [
+        "//visibility:public",
+    ],
+)
+
+define_mgk_ddk_ko(
+    name = "tran_key_bigdata",
+    srcs = [
+        "tran_key_bigdata.c",
+    ],
+    hdrs = glob(["**/*.h", "include/*.h"]),
+    includes = ["include","."],
+    
+    copts = [
+    "-Wall",
+    "-Werror",
+    "-I$(srctree)/drivers/misc/tranlog/",
+    "-I$(srctree)/drivers/misc/transsion/include/tk/",
+    "-I$(srctree)/drivers/misc/transsion/tnek/",
+    "-I$(DEVICE_MODULES_PATH)/drivers/misc/tranlog/",
+    "-I$(DEVICE_MODULES_PATH)/drivers/misc/transsion/include/tk/",
+    "-I$(DEVICE_MODULES_PATH)/drivers/misc/transsion/include/",
+    "-I$(DEVICE_MODULES_PATH)/drivers/misc/transsion/thd",
+    ],
+    ko_deps = [
+       "//kernel_device_modules-{}/drivers/misc/tranlog:transsion_tranlog".format(kernel_version),
+       "//kernel_device_modules-{}/drivers/misc/transsion/tnek:tnek".format(kernel_version),
+       "//kernel_device_modules-{}/drivers/misc/transsion/thd:thd".format(kernel_version),
+    ],
+)
+
+filegroup(
+    name = "ddk_kconfigs",
+    srcs = glob([
+        "**/Kconfig",
+    ]),
+)

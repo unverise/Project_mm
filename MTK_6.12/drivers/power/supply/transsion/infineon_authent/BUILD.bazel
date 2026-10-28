@@ -1,0 +1,75 @@
+load("//build/bazel_mgk_rules:mgk_ddk_ko.bzl", "define_mgk_ddk_ko")
+load("@mgk_info//:kernel_version.bzl", "kernel_version",)
+
+package(
+    default_visibility = [
+        "//visibility:public",
+    ],
+)
+
+filegroup(
+    name = "ddk_kconfigs",
+    srcs = glob([
+        "**/Kconfig",
+    ]),
+)
+
+filegroup(
+    name = "ddk_src",
+    srcs = glob([
+        "**/Makefile",
+        "**/Kbuild",
+        "**/*.c",
+        "**/*.h",
+    ]),
+)
+
+# battery authent module
+define_mgk_ddk_ko(
+     name = "infineon_authent",
+     srcs = [
+        "authon_main.c",
+        "authon-sdk/helper/helper.c",
+        "authon-sdk/ecc/ecc.c",
+        "authon-sdk/host_auth/host_auth.c",
+        "authon-sdk/interface/interface.c",
+        "authon-sdk/interface/swi.c",
+        "authon-sdk/interface/swi_bus_command.c",
+        "authon-sdk/nvm/nvm.c",
+        "authon-sdk/crypto/crypto_lib.c",
+        "authon-sdk/authon_api.c",
+     ],
+    ko_deps = [
+        "//kernel_device_modules-{}/drivers/power/supply/transsion:tc_common_class".format(kernel_version),
+        "//kernel_device_modules-{}/drivers/power/supply/transsion:tc_ta_class".format(kernel_version),
+        "//kernel_device_modules-{}/drivers/power/supply/transsion:tc_algorithm_class".format(kernel_version),
+        "//kernel_device_modules-{}/drivers/power/supply/transsion:tc_charger_class".format(kernel_version),
+        "//kernel_device_modules-{}/drivers/power/supply/transsion:tc_adapter_class".format(kernel_version),
+        "//kernel_device_modules-{}/drivers/power/supply/transsion:tc_misc_intf".format(kernel_version),
+    ],
+	 header_deps = [
+	   "//kernel_device_modules-{}/drivers/power/supply:mtk_charger_header".format(kernel_version),
+     ],
+     hdrs = [
+        "authon-sdk/authon_api.h",
+        "authon-sdk/authon_config.h",
+        "authon-sdk/authon_status.h",
+        "authon-sdk/interface/register.h",
+        "authon-sdk/helper/interface_helper.h",
+        "authon-sdk/ecc/ecc.h",
+        "authon-sdk/host_auth/host_auth.h",
+        "authon-sdk/interface/interface.h",
+        "authon-sdk/interface/swi.h",
+        "authon-sdk/interface/swi_bus_command.h",
+        "authon-sdk/nvm/nvm.h",
+        "authon-sdk/crypto/crypto_lib.h",
+        "authon-sdk/crypto/ecc_curve.h",
+        "authon-sdk/platform/authon_platform.h",
+     ],
+     includes = [
+         ".",
+     ],
+    copts = [
+        "-I$(DEVICE_MODULES_PATH)/drivers/power/supply/transsion",
+    ],
+)

@@ -1,0 +1,24 @@
+config TRAN_POWER_CTRL
+    tristate "TRAN_POWER_CTRL"
+    default m
+    help
+      Enable TRAN_POWER_CTRL build
+
+config ENABLE_TRAN_POWER_CTRL
+    bool "ENABLE_TRAN_POWER_CTRL"
+    default y
+    help
+      Enable CPU Usage log on dmesg
+
+config TRAN_KERNEL_FANS_SUPPORT
+    bool "SPD_TI kernel fans macro"
+    default n
+    help
+      This macro contains the following functions
+      which developed by TRANSSION SPD_TI Group.
+
+config TRAN_ODPM_MD_SWITCH
+    bool "TRAN_ODPM_MD_SWITCH"
+    default n
+    help
+      Switch for ODPM and MD sleep

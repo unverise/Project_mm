@@ -1,0 +1,6 @@
+source "drivers/leds/tran_led/core/Kconfig"
+source "drivers/leds/tran_led/aw2023/Kconfig"
+source "drivers/leds/tran_led/tran_leds_hk32f0301/Kconfig"
+#source "drivers/leds/tran_led/aw20144/Kconfig"
+
+

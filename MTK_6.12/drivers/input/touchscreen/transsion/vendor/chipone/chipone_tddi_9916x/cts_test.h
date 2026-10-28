@@ -1,0 +1,173 @@
+#ifndef CTS_TEST_H
+#define CTS_TEST_H
+
+#define CTS_TEST_PASS        0
+#define CTS_TEST_FAIL        1
+
+#define CTS_TEST_FLAG_RESET_BEFORE_TEST             (1u << 0)
+#define CTS_TEST_FLAG_RESET_AFTER_TEST              (1u << 1)
+#define CTS_TEST_FLAG_DISPLAY_ON                    (1u << 2)
+#define CTS_TEST_FLAG_DISABLE_GAS                   (1u << 3)
+#define CTS_TEST_FLAG_DISABLE_LINESHIFT             (1u << 4)
+
+#define CTS_TEST_FLAG_VALIDATE_DATA                 (1u << 8)
+#define CTS_TEST_FLAG_VALIDATE_PER_NODE             (1u << 9)
+#define CTS_TEST_FLAG_VALIDATE_MIN                  (1u << 10)
+#define CTS_TEST_FLAG_VALIDATE_MAX                  (1u << 11)
+#define CTS_TEST_FLAG_VALIDATE_SKIP_INVALID_NODE    (1u << 12)
+#define CTS_TEST_FLAG_STOP_TEST_IF_VALIDATE_FAILED  (1u << 13)
+
+#define CTS_TEST_FLAG_DUMP_TEST_DATA_TO_CONSOLE     (1u << 16)
+#define CTS_TEST_FLAG_DUMP_TEST_DATA_TO_USERSPACE   (1u << 17)
+#define CTS_TEST_FLAG_DUMP_TEST_DATA_TO_FILE        (1u << 18)
+#define CTS_TEST_FLAG_DUMP_TEST_DATA_TO_FILE_APPEND (1u << 19)
+#define CTS_TEST_FLAG_DUMP_TEST_DATA_TO_FILE_CSV    (1u << 20)
+
+#define CTS_TEST_FLAG_DRIVER_LOG_TO_USERSPACE       (1u << 24)
+#define CTS_TEST_FLAG_DRIVER_LOG_TO_FILE            (1u << 25)
+#define CTS_TEST_FLAG_DRIVER_LOG_TO_FILE_APPEND     (1u << 26)
+
+#define CTS_TEST_CNEG_FLAG      CTS_TEST_FLAG_VALIDATE_DATA |\
+                                CTS_TEST_FLAG_VALIDATE_MIN |\
+                                CTS_TEST_FLAG_VALIDATE_MAX |\
+                                CTS_TEST_FLAG_STOP_TEST_IF_VALIDATE_FAILED |\
+                                CTS_TEST_FLAG_DUMP_TEST_DATA_TO_CONSOLE |\
+                                CTS_TEST_FLAG_DUMP_TEST_DATA_TO_USERSPACE
+//                                CTS_TEST_FLAG_DUMP_TEST_DATA_TO_FILE
+
+#define CTS_TEST_OPEN_SHORT_FLAG      CTS_TEST_FLAG_VALIDATE_DATA |\
+                                        CTS_TEST_FLAG_VALIDATE_MIN |\
+                                        CTS_TEST_FLAG_STOP_TEST_IF_VALIDATE_FAILED |\
+                                        CTS_TEST_FLAG_DUMP_TEST_DATA_TO_CONSOLE |\
+                                        CTS_TEST_FLAG_DUMP_TEST_DATA_TO_USERSPACE
+//                                        CTS_TEST_FLAG_DUMP_TEST_DATA_TO_FILE
+
+#define CTS_TEST_NOISE_FLAG      CTS_TEST_FLAG_VALIDATE_DATA |\
+                                        CTS_TEST_FLAG_VALIDATE_MAX |\
+                                        CTS_TEST_FLAG_STOP_TEST_IF_VALIDATE_FAILED |\
+                                        CTS_TEST_FLAG_DUMP_TEST_DATA_TO_CONSOLE |\
+                                        CTS_TEST_FLAG_DUMP_TEST_DATA_TO_USERSPACE
+//                                        CTS_TEST_FLAG_DUMP_TEST_DATA_TO_FILE
+
+#define CTS_TEST_RAWDATA_FLAG      CTS_TEST_FLAG_VALIDATE_DATA |\
+                                        CTS_TEST_FLAG_VALIDATE_MIN |\
+                                        CTS_TEST_FLAG_VALIDATE_MAX |\
+                                        CTS_TEST_FLAG_STOP_TEST_IF_VALIDATE_FAILED |\
+                                        CTS_TEST_FLAG_DUMP_TEST_DATA_TO_CONSOLE |\
+                                        CTS_TEST_FLAG_DUMP_TEST_DATA_TO_USERSPACE
+//                                        CTS_TEST_FLAG_DUMP_TEST_DATA_TO_FILE
+
+#define MAKE_INVALID_NODE(r, c)                     (((c) << 16) | (r))
+#define INVALID_NODE_ROW(node)                      ((u16)(node))
+#define INVALID_NODE_COL(node)                      ((u16)((node) >> 16))
+
+#define CTS_TEST_DATA_DIR                   "/sdcard"
+#define CTS_RAWDATA_TEST_DATA_FILEPATH      CTS_TEST_DATA_DIR"/FWMutualTest.csv"
+#define CTS_NOISE_TEST_DATA_FILEPATH        CTS_TEST_DATA_DIR"/NoiseTest.csv"
+#define CTS_OPEN_TEST_DATA_FILEPATH         CTS_TEST_DATA_DIR"/OpenTest.csv"
+#define CTS_SHORT_TEST_DATA_FILEPATH        CTS_TEST_DATA_DIR"/ShortTest.csv"
+#define CTS_COMP_CAP_TEST_DATA_FILEPATH     CTS_TEST_DATA_DIR"/FWCCTest.csv"
+
+#define SAMPLE_FRAMES_MAX       300
+
+
+#define CTS_FIRMWARE_WORK_MODE_NORMAL             (0x00)
+#define CTS_FIRMWARE_WORK_MODE_CFG                (0x01)
+#define CTS_FIRMWARE_WORK_MODE_OPEN_SHORT         (0x02)
+
+#define CTS_FIRMWARE_KRANG_WORK_MODE_NORMAL       CTS_FIRMWARE_WORK_MODE_NORMAL
+#define CTS_FIRMWARE_KRANG_WORK_MODE_STYLUS_DBG   (0x02)
+#define CTS_FIRMWARE_KRANG_WORK_MODE_FINGER_DBG   (0x02)
+#define CTS_FIRMWARE_KRANG_WORK_MODE_CFG          (0x06)
+#define CTS_FIRMWARE_KRANG_WORK_MODE_OPEN_SHORT   (0x05)
+
+#define CTS_TEST_NONE_OPEN_SHORT                  (0x00)
+#define CTS_TEST_TYPE_SHORT                       (0x01)
+#define CTS_TEST_TYPE_OPEN                        (0x02)
+
+#define CTS_SHORT_TEST_UNDEFINED                  (0x00)
+#define CTS_SHORT_TEST_BETWEEN_COLS               (0x01)
+#define CTS_SHORT_TEST_BETWEEN_ROWS               (0x02)
+#define CTS_SHORT_TEST_BETWEEN_GND                (0x03)
+
+
+struct cts_test_val {
+    u32 hwid;
+    int short_to_gnd_loop;
+    int short_to_row_loop;
+    int short_to_col_loop;
+};
+
+enum cts_test_item {
+    CTS_TEST_RESET_PIN = 1,
+    CTS_TEST_INT_PIN,
+    CTS_TEST_RAWDATA,
+    CTS_TEST_NOISE,
+    CTS_TEST_OPEN,
+    CTS_TEST_SHORT,
+    CTS_TEST_COMPENSATE_CAP,
+    CTS_TEST_ITEM_MAX,
+};
+
+#pragma pack(1)
+struct cts_test_param {
+    int test_item;
+
+    __u32 flags;
+
+    __u32  num_invalid_node;
+    __u32 *invalid_nodes;
+    int *min;
+    int *max;
+
+    int     *test_result;
+    s64     *elapsed_time_ms;
+
+    void    *test_data_buf;
+    /* Size of data buffer is set from user side, but it's not reliable.
+     * it can be calculated from driver side, so plan to remove this variable.
+     */
+    int test_data_buf_size;
+    int *test_data_size;
+    char *test_data_filepath;
+
+    int driver_log_level;
+    char *driver_log_buf;
+    int driver_log_buf_size;
+    int *driver_log_wr_size;
+    char *driver_log_filepath;
+
+    u32 sample_frames;
+};
+#pragma pack()
+
+#define CTS_TEST_REG_FOR_RESET_TEST          0x00033048
+//#define CTS_TEST_REG_FOR_RESET_TEST          0x00073048
+
+int cts_init_test_vals(struct cts_device *cts_dev,
+    const struct cts_test_val *test_val);
+
+int prepare_product_test(struct cts_device *cts_dev);
+void post_product_test(struct cts_device *cts_dev);
+extern const char *cts_test_item_str(int test_item);
+extern int cts_write_file(struct file *filp, const void *data, size_t size);
+extern int cts_mkdir_for_file(const char *filepath, umode_t mode);
+
+extern int cts_start_dump_test_data_to_file(const char *filepath,
+    bool append_to_file);
+extern void cts_stop_dump_test_data_to_file(void);
+
+extern int cts_test_reset_pin(struct cts_device *cts_dev);
+extern int cts_test_int_pin(struct cts_device *cts_dev);
+extern int cts_test_rawdata(struct cts_device *cts_dev,
+        struct cts_test_param *param);
+extern int cts_test_noise(struct cts_device *cts_dev,
+        struct cts_test_param *param);
+extern int cts_test_open(struct cts_device *cts_dev,
+        struct cts_test_param *param);
+extern int cts_test_short(struct cts_device *cts_dev,
+        struct cts_test_param *param);
+extern int cts_test_compensate_cap(struct cts_device *cts_dev,
+        struct cts_test_param *param);
+
+#endif /* CTS_TEST_H */

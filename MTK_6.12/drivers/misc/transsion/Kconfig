@@ -1,0 +1,38 @@
+#Transsion Top Secret
+#
+#Copyright (C) 2019 Transsion Inc.
+#
+#@author zhongyu.shi
+#@version 1.0, 2019-06-03
+#
+config TRAN_TNEK_SUPPORT
+    tristate "Enable Transsion New Engine Kernel Driver"
+    default m
+    help
+      TNEK is created by SPD_TI group to collect crash in Kernel,
+      and export an api to collect debug info.
+config TRAN_FREEZE_DETECT_SUPPORT
+    tristate "Enable tran freeze detect"
+    default y
+    help
+      tran freeze detect driver
+
+config TRAN_HUNG_DETECT
+    tristate "transsion hung detect driver"
+    default m
+    help
+       transsion hung detect driver
+
+config TRAN_FREEZE_AEGIS_SUPPORT
+    tristate "Enable tran aggis"
+    default y
+    help
+       transsion aegis driver
+
+#USD: add GPIO SAR monitor by ningninggao 20241114 start
+config TRAN_GPIO_SAR_MONITOR_MODULE
+    tristate "transsion GPIO SAR monitor"
+        default n
+        help
+            transsion GPIO SAR monitor
+#USD: add GPIO SAR monitor by ningninggao 20241114 end

@@ -1,0 +1,337 @@
+#ifndef _SGM41516S_CHARGER_H
+#define _SGM41516S_CHARGER_H
+
+/* define register */
+#define SGM41516S_INPUT_CURR_LIMIT	0x00
+#define SGM41516S_CHRG_CTRL_1	    0x01
+#define SGM41516S_CHRG_CURR_LIMIT	0x02
+#define SGM41516S_CHRG_PRE_TERM	    0x03
+#define SGM41516S_BAT_VOLT_LIMIT	0x04
+#define SGM41516S_CHRG_CTRL_2	    0x05
+#define SGM41516S_CHRG_CTRL_3	    0x06
+#define SGM41516S_CHRG_CTRL_4	    0x07
+#define SGM41516S_CHRG_STAT_1	    0x08
+#define SGM41516S_CHRG_FAULT	    0x09
+#define SGM41516S_CHRG_STAT_2	    0x0a
+#define SGM41516S_PART_INFO	        0x0b
+#define SGM41516S_CHRG_CTRL_5	    0x0c
+#define SGM41516S_CHRG_CTRL_6	    0x0d
+#define SGM41516S_CHRG_FLAG	        0x0e
+#define SGM41516S_CHRG_CTRL_7	    0x0f
+#define SGM41516S_CHRG_CTRL_8	    0x10
+#define SGM41516S_CHRG_CTRL_9	    0x11
+#define SGM41516S_CHRG_CTRL_10	    0x12
+#define SGM41516S_CHRG_VBAT_ADC	    0x13
+#define SGM41516S_CHRG_VSYS_ADC	    0x14
+#define SGM41516S_CHRG_TS_ADC	    0x15
+#define SGM41516S_CHRG_VBUS_ADC	    0x16
+#define SGM41516S_CHRG_IBAT_ADC	    0x17
+#define SGM41516S_CHRG_IBUS_ADC	    0x18
+#define SGM41516S_ADC_FUNC_CTRL	    0x19
+#define SGM41516S_IR_COMPENSATION	0x1a
+#define SGM41516S_DPDM_CTRL_1	    0x1b
+#define SGM41516S_DPDM_CTRL_2	    0x1c
+
+#define SGM41516_REG_NUM    0x1D
+//reg 00
+#define SGM41516S_EN_ICHG_MON         GENMASK(7, 6)
+/* iindpm current */
+#define SGM41516S_IINDPM_I_MASK		  GENMASK(5, 0)
+#define SGM41516S_IINDPM_I_MIN_uA     100000
+#define SGM41516S_IINDPM_I_MAX_uA	  3300000
+#define SGM41516S_IINDPM_STEP_uA	  100000
+#define SGM41516S_IINDPM_DEF_uA		  2400000
+
+//reg 01
+#define SGM41516S_PFM_DIS			BIT(7)
+#define SGM41516S_WD_RST			BIT(6)
+#define SGM41516S_OTG_EN			BIT(5)
+#define SGM41516S_CHRG_EN		    BIT(4)
+#define SGM41516S_SYS_MIN_MASK		GENMASK(3, 1)
+#define SGM41516S_MIN_BAT_SEL		BIT(0)
+
+//reg 02
+#define SGM41516S_Q1_FULLON		    BIT(7)
+/* charge current */
+#define SGM41516S_ICHRG_CUR_MASK	GENMASK(6, 0)
+#define SGM41516S_ICHRG_I_STEP_uA	  60000
+#define SGM41516S_ICHRG_I_MIN_uA		0
+#define SGM41516S_ICHRG_I_MAX_uA		5100000
+#define SGM41516S_ICHRG_I_DEF_uA		2040000
+
+//reg 03
+/* precharge current */
+#define SGM41516S_PRECHRG_CUR_MASK		GENMASK(7, 4)
+#define SGM41516S_PRECHRG_CURR_STEP_uA	60000
+#define SGM41516S_PRECHRG_I_MIN_uA		60000
+#define SGM41516S_PRECHRG_I_MAX_uA		780000
+#define SGM41516S_PRECHRG_I_DEF_uA		180000
+
+/* termination current */
+#define SGM41516S_TERMCHRG_CUR_MASK		GENMASK(3, 0)
+#define SGM41516S_TERMCHRG_CURR_STEP_uA	60000
+#define SGM41516S_TERMCHRG_I_MIN_uA		60000
+#define SGM41516S_TERMCHRG_I_MAX_uA		960000
+#define SGM41516S_TERMCHRG_I_DEF_uA		180000
+
+//reg 04
+/* charge voltage */
+#define SGM41516S_VREG_V_MASK		GENMASK(7, 1)
+#define SGM41516S_VREG_V_SHIFT		1
+#define SGM41516S_VREG_V_MAX_uV		4770000
+#define SGM41516S_VREG_V_MIN_uV		3500000
+#define SGM41516S_VREG_V_DEF_uV		4200000
+#define SGM41516S_VREG_V_STEP_uV	10000
+
+//reg 05
+#define SGM41516S_EN_TERM		  BIT(7)
+#define SGM41516S_EN_TSD_DISFET	  BIT(6)
+#define SGM41516S_WATCHDOG_MASK	  GENMASK(5, 4)
+#define SGM41516S_EN_TIMER        BIT(3)
+#define SGM41516S_CHG_TIMER       BIT(2)
+#define SGM41516S_TREG            BIT(1)
+#define SGM41516S_JEITA_ISET_L    BIT(0)
+
+//reg 06
+#define SGM41516S_EN_ILIM		  BIT(7)
+#define SGM41516S_BOOSTV		  GENMASK(6, 4)
+#define SGM41516S_BOOSTV_SHIFT	  4
+/* vindpm voltage */
+#define SGM41516S_VINDPM_V_MASK		GENMASK(3, 0)
+#define SGM41516S_VINDPM_V_MIN_uV	3900000
+#define SGM41516S_VINDPM_V_MAX_uV	12000000
+#define SGM41516S_VINDPM_STEP_uV	100000
+#define SGM41516S_VINDPM_DEF_uV		4500000
+#define SGM41516S_VINDPM_OS_MASK	GENMASK(1, 0)
+
+//reg 07
+#define SGM41516S_IINDET_EN		  BIT(7)
+#define SGM41516S_TMR2X_EN		  BIT(6)
+#define SGM41516S_BATFET_DIS	  BIT(5)
+#define SGM41516S_JEITA_VSET_H	  BIT(4)
+#define SGM41516S_BATFET_DLY	  BIT(3)
+#define SGM41516S_BATFET_RST_EN	  BIT(2)
+#define SGM41516S_VDPM_BAT_TRACK  GENMASK(1, 0)
+
+//reg 08
+/* charge type */
+#define SGM41516S_VBUS_STAT_MASK		GENMASK(7, 5)
+#define SGM41516S_VBUS_STAT_SHIFT		5
+#define SGM41516S_NOT_INPUT		0
+#define SGM41516S_USB_SDP		BIT(5)
+#define SGM41516S_USB_CDP		BIT(6)
+#define SGM41516S_USB_DCP		(BIT(5) | BIT(6))
+#define SGM41516S_UNKNOWN		(BIT(7) | BIT(5))
+#define SGM41516S_NON_STANDARD	(BIT(7) | BIT(6))
+#define SGM41516S_OTG_MODE		(BIT(7) | BIT(6) | BIT(5))
+
+/* charge status */
+#define SGM41516S_CHG_STAT_MASK		GENMASK(4, 3)
+#define SGM41516S_CHG_STAT_SHIFT		3
+#define SGM41516S_NOT_CHRGING	    0
+#define SGM41516S_PRECHRG		    BIT(3)
+#define SGM41516S_FAST_CHRG		    BIT(4)
+#define SGM41516S_TERM_CHRG		    (BIT(3) | BIT(4))
+
+#define SGM41516S_PG_STAT		    BIT(2)
+#define SGM41516S_THERM_STAT		BIT(1)
+#define SGM41516S_VSYS_STAT		    BIT(0)
+
+
+//reg 09
+//Fault status
+#define SGM41516S_WDT_FAULT_MASK		BIT(7)
+#define SGM41516S_BOOST_FAULT_MASK		BIT(6)
+#define SGM41516S_CHRG_FAULT_MASK		GENMASK(5, 4)
+#define SGM41516S_CHRG_FAULT_SHIFT		4
+#define SGM41516S_BAT_FAULT_MASK		BIT(3)
+/* TEMP Status */
+#define SGM41516S_TEMP_MASK			GENMASK(2, 0)
+#define SGM41516S_TEMP_SHIFT		0
+#define SGM41516S_TEMP_NORMAL		BIT(0)
+#define SGM41516S_TEMP_WARM			BIT(1)
+
+//reg 0A
+//Fault status
+#define SGM41516S_VBUS_GD			BIT(7)
+#define SGM41516S_VINDPM_STAT		BIT(6)
+#define SGM41516S_IINDPM_STAT		BIT(5)
+#define SGM41516S_CV_STAT		    BIT(4)
+#define SGM41516S_TOPOFF_ACTIVE		BIT(3)
+#define SGM41516S_ACOV_STAT		    BIT(2)
+#define SGM41516S_VINDPM_INT_MASK	BIT(1)
+#define SGM41516S_IINDPM_INT_MASK	BIT(0)
+
+//reg 0B
+#define SGM41516S_REG_RST			BIT(7)
+#define SGM41516S_PN_MASK		    GENMASK(6, 3)
+#define SGM41516S_PN		        (BIT(6) | BIT(4))
+
+//reg 0C
+#define SGM41516S_JEITA_VSET_L   	BIT(7)
+#define SGM41516S_JEITA_ISET_L_EN	BIT(6)
+#define SGM41516S_JEITA_ISET_H   	GENMASK(5, 4)
+#define SGM41516S_JEITA_VT2      	GENMASK(3, 2)
+#define SGM41516S_JEITA_VT3      	GENMASK(1, 0)
+
+//reg 0D
+#define SGM41516S_EN_PUMPX		BIT(7)
+#define SGM41516S_PUMPX_UP		BIT(6)
+#define SGM41516S_PUMPX_DN		BIT(5)
+#define SGM41516S_JEITA_SET		BIT(0)
+
+//reg 0E
+#define SGM41516S_INPUT_DET_DONE		BIT(7)
+
+//reg 0F
+#define SGM41516S_tSHIPMODE_MASK		BIT(5)
+#define SGM41516S_ISHORT_SET_MASK		BIT(4)
+#define SGM41516S_STAT_SET_MASK		    GENMASK(3, 2)
+#define SGM41516S_VINDPM_OS_MASK		GENMASK(1, 0)
+
+//reg 10
+#define SGM41516S_VAC_OVP_MASK		GENMASK(7, 6)
+#define SGM41516S_ITERM_TIMER		BIT(5)
+#define SGM41516S_ITERM_SEL		    BIT(4)
+#define SGM41516S_IPRECHG_SEL		BIT(3)
+#define SGM41516S_BOOST_LIM			GENMASK(2, 0)
+
+//reg 11
+#define SGM41516S_BATLOWV		    GENMASK(7, 6)
+#define SGM41516S_CONV_START		BIT(5)
+#define SGM41516S_CONV_RATE		    BIT(4)
+#define SGM41516S_TOPOFF_TIMER	    GENMASK(3, 2)
+#define SGM41516S_VRECHARGE_MASK	GENMASK(1, 0)
+
+
+//reg 12
+#define SGM41516S_IBATOCP		    GENMASK(7, 6)
+#define SGM41516S_IBATOCP_TIME		GENMASK(5, 4)
+#define SGM41516S_EN_HIZ		    BIT(3)
+#define SGM41516S_BC12		        BIT(2)
+#define SGM41516S_OTGF		        BIT(1)
+#define SGM41516S_VBUS_GOOD		    BIT(0)
+
+//reg 19
+#define SGM41516S_IBUS_ADC_DIS   BIT(7)
+#define SGM41516S_IBAT_ADC_DIS   BIT(6)
+#define SGM41516S_VBUS_ADC_DIS   BIT(5)
+#define SGM41516S_VBAT_ADC_DIS   BIT(4)
+#define SGM41516S_VSYS_ADC_DIS   BIT(3)
+#define SGM41516S_TS_ADC_DIS     BIT(2)
+
+//reg 1A
+#define SGM41516S_BAT_COMP_MASK		GENMASK(7, 4)
+#define SGM41516S_VCLAMP_MASK		GENMASK(3, 0)
+
+//reg 1B
+/* DP DM SEL */
+#define SGM41516S_DP_VSEL_MASK		GENMASK(6, 5)
+#define SGM41516S_DM_VSEL_MASK		GENMASK(4, 3)
+#define SGM41516S_DP_VOLT_SHIFT		5
+#define SGM41516S_DM_VOLT_SHIFT		3
+#define SGM41516S_IIC_LT_EN		    BIT(2)
+#define SGM41516S_COMP_TH		    BIT(1)
+#define SGM41516S_DPDM_FREEZE		BIT(0)
+
+//reg 1C
+#define SGM41516S_LT_WD_TIMER_MASK		GENMASK(7, 6)
+#define SGM41516S_DPPU_ENHANCE		    BIT(5)
+#define SGM41516S_DMPU_ENHANCE		    BIT(4)
+#define SGM41516S_VIL0P7V_EN		    BIT(3)
+#define SGM41516S_DPDM_EN		        BIT(2)
+#define SGM41516S_DP_STAT		        BIT(1)
+#define SGM41516S_DM_STAT		        BIT(0)
+
+
+/* WDT TIMER SET */
+#define SGM41516S_WDT_TIMER_MASK		GENMASK(5, 4)
+#define SGM41516S_WDT_TIMER_DISABLE	0
+#define SGM41516S_WDT_TIMER_40S			BIT(4)
+#define SGM41516S_WDT_TIMER_80S			BIT(5)
+#define SGM41516S_WDT_TIMER_160S		(BIT(4) | BIT(5))
+
+
+#define DEFAULT_INPUT_CURRENT		(500 * 1000)
+#define SGM41516S_MANUFACTURER		"SGMICRO"
+
+enum Chg_Part_id{
+	SGM41542S_PN_ID,	
+	SGM41516S_PN_ID,
+	MAX_PN_ID,
+};
+
+struct sgm_vendor_info {	
+	char * name;
+	u8 part_id;
+};
+
+enum sgm41516s_adc_channel { 
+	ADC_VBAT,
+	ADC_VSYS,
+	ADC_TS,
+	ADC_VBUS,
+	ADC_IBAT,
+	ADC_IBUS,
+	ADC_MAX_NUM,
+};
+
+enum SGM41516S_HEALTH_STATUS{
+	SGM41516S_NORMAL = 0,
+	SGM41516S_TS_WARM = 2,
+	SGM41516S_TS_COOL = 3,
+	SGM41516S_TS_COLD = 5,
+	SGM41516S_TS_HOT = 6,
+};
+
+enum {
+	SGM_DP_DM_VOL_HIZ,
+	SGM_DP_DM_VOL_0P0,
+	SGM_DP_DM_VOL_0P6,
+	SGM_DP_DM_VOL_3P3,
+};
+
+enum SGM41544_QC_VOLT {
+	QC_20_5000mV,
+	QC_20_9000mV,
+	QC_20_12000mV,
+};
+
+struct sgm41516s_init_data {
+	int ichg;	/* charge current */
+	int ilim;	/* input current */
+	int vreg;	/* regulation voltage */
+	int iterm;	/* termination current */
+	int iprechg;	/* precharge current */
+	int vlim;	/* minimum system voltage limit */
+	int max_ichg;
+	int max_vreg;
+	int max_ilim;
+};
+
+struct sgm41516s_state {
+	u8 status_1;
+	u8 chrg_type;
+	u8 chrg_stat;
+	bool online;
+	bool vsys_stat;
+	bool therm_stat;	
+	
+	u8 fault_status;
+	bool wdt_fault;
+	bool boost_fault;
+    u8 chrg_fault;
+	u8 ntc_fault;
+	u8 health;
+	
+	u8 status_2;
+	bool vbus_gd;
+	bool vindpm_stat;
+	bool iindpm_stat;
+	bool cv_stat;
+	bool acov_stat;
+	bool topoff_active;
+	bool vindpm_int_mask;	
+	bool iindpm_int_mask;	
+};
+#endif

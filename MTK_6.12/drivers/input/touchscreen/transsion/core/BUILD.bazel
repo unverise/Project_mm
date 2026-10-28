@@ -1,0 +1,56 @@
+load("//build/bazel_mgk_rules:mgk_ddk_ko.bzl", "define_mgk_ddk_ko")
+load("//build/kernel/kleaf:kernel.bzl", "ddk_headers")
+load("@mgk_info//:kernel_version.bzl","kernel_version",)
+
+package(
+    default_visibility = [
+        "//visibility:public",
+    ],
+)
+
+filegroup(
+	name = "srcs",
+	srcs = glob([
+		"**/*.c",
+	]),
+)
+
+ddk_headers(
+        name = "tp_core_header",
+        hdrs = glob([
+                "include/*.h",
+        ]),
+        includes = ["include"],
+)
+
+define_mgk_ddk_ko(
+    name = "adaptive-ts",
+    srcs = [
+        ":srcs",
+    ],
+    hdrs = glob(["**/*.h"]),
+    includes = ["include"],
+    copts = [
+        "-Wall",
+        "-Werror",
+        "-I$(DEVICE_MODULES_PATH)/drivers/gpu/drm/mediatek/mediatek_v2/v1",
+        "-I$(DEVICE_MODULES_PATH)/drivers/gpu/drm/mediatek/mediatek_v2/",
+        "-I$(DEVICE_MODULES_PATH)/drivers/misc/tranlog/",
+	"-I$(DEVICE_MODULES_PATH)/drivers/misc/transsion/include",
+        "-I$(DEVICE_MODULES_PATH)/drivers/misc/transsion/thd",
+    ],
+    ko_deps = [
+	"//kernel_device_modules-{}/drivers/gpu/drm/mediatek/mediatek_v2/v1:mediatek_drm_v1".format(kernel_version),
+        "//kernel_device_modules-{}/drivers/gpu/drm/mediatek/mediatek_v2:mtk_disp_notify".format(kernel_version),
+	"//kernel_device_modules-{}/drivers/misc/tranlog:transsion_tranlog".format(kernel_version),
+        "//kernel_device_modules-{}/drivers/misc/transsion/thd:thd".format(kernel_version),
+    "//kernel_device_modules-{}/drivers/misc/mediatek/ops_mediator:opsMediator".format(kernel_version),
+    ],
+)
+
+filegroup(
+    name = "ddk_kconfigs",
+    srcs = glob([
+        "**/Kconfig",
+    ]),
+)

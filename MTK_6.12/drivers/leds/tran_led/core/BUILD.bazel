@@ -1,0 +1,42 @@
+load("//build/bazel_mgk_rules:mgk_ddk_ko.bzl", "define_mgk_ddk_ko")
+load("@mgk_info//:kernel_version.bzl", "kernel_version",)
+
+package(
+    default_visibility = [
+        "//visibility:public",
+    ],
+)
+
+filegroup(
+    name = "ddk_kconfigs",
+    srcs = glob([
+        "**/Kconfig",
+    ]),
+)
+
+filegroup(
+    name = "ddk_src",
+    srcs = glob([
+        "**/Makefile",
+        "**/Kbuild",
+        "**/*.c",
+        "**/*.h",
+    ]),
+)
+
+
+# tran_led core module
+define_mgk_ddk_ko(
+     name = "tran-led-core",
+     srcs = [
+         "tran_led_core.c",
+         "tran_led_class.c",
+     ],
+     hdrs = [
+         "tran_led_core.h",
+         "tran_led_class.h",
+     ],
+     includes = [
+         ".",
+     ],
+)

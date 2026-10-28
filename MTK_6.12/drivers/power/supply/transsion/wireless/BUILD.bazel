@@ -1,0 +1,126 @@
+load("//build/bazel_mgk_rules:mgk_ddk_ko.bzl", "define_mgk_ddk_ko")
+load("//build/kernel/kleaf:kernel.bzl", "ddk_headers")
+load("@mgk_info//:kernel_version.bzl","kernel_version",)
+
+package(
+    default_visibility = [
+        "//visibility:public",
+    ],
+)
+
+filegroup(
+    name = "ddk_kconfigs",
+    srcs = glob([
+        "**/Kconfig",
+    ]),
+)
+
+filegroup(
+    name = "ddk_src",
+    srcs = glob([
+        "**/Makefile",
+        "**/Kbuild",
+        "**/*.c",
+        "**/*.h",
+    ]),
+)
+
+ddk_headers(
+        name = "tran_wireless_manager_header",
+        hdrs = glob([
+                "*.h",
+        ]),
+        includes = ["."],
+)
+
+define_mgk_ddk_ko(
+    name = "tran_wireless_manager",
+    srcs = [
+        "wireless_manager.c",
+        "wireless_class.c",
+        "wireless_charger.c",
+    ],
+    header_deps = [
+       "//kernel_device_modules-{}/drivers/power/supply/transsion:tc_charger_header".format(kernel_version),
+    ],
+    hdrs = glob(["*.h"]),
+    includes = ["."],
+    copts = [
+        "-I$(DEVICE_MODULES_PATH)/drivers/power/supply/transsion",
+    ],
+    ko_deps = [
+        "//kernel_device_modules-{}/drivers/power/supply/transsion:tc_charger_framework".format(kernel_version),
+        "//kernel_device_modules-{}/drivers/power/supply/transsion:tc_common_class".format(kernel_version),
+        "//kernel_device_modules-{}/drivers/power/supply/transsion:tc_ta_class".format(kernel_version),
+        "//kernel_device_modules-{}/drivers/power/supply/transsion:tc_algorithm_class".format(kernel_version),
+        "//kernel_device_modules-{}/drivers/power/supply/transsion:tc_charger_class".format(kernel_version),
+        "//kernel_device_modules-{}/drivers/power/supply/transsion:tc_adapter_class".format(kernel_version),
+        "//kernel_device_modules-{}/drivers/power/supply/transsion:tc_misc_intf".format(kernel_version),
+        "//kernel_device_modules-{}/drivers/power/supply/transsion:tc_tcpc".format(kernel_version),
+    ],
+)
+
+define_mgk_ddk_ko(
+    name = "tran_wireless_ta",
+    srcs = [
+        "tran_wireless_ta.c",
+    ],
+    header_deps = [
+       "//kernel_device_modules-{}/drivers/power/supply/transsion:tc_charger_header".format(kernel_version),
+    ],
+    hdrs = glob(["*.h"]),
+    includes = ["."],
+    copts = [
+        "-I$(DEVICE_MODULES_PATH)/drivers/power/supply/transsion",
+    ],
+    ko_deps = [
+        "//kernel_device_modules-{}/drivers/power/supply/transsion/wireless:tran_wireless_manager".format(kernel_version),
+        "//kernel_device_modules-{}/drivers/power/supply/transsion:tc_charger_framework".format(kernel_version),
+        "//kernel_device_modules-{}/drivers/power/supply/transsion:tc_common_class".format(kernel_version),
+        "//kernel_device_modules-{}/drivers/power/supply/transsion:tc_ta_class".format(kernel_version),
+        "//kernel_device_modules-{}/drivers/power/supply/transsion:tc_algorithm_class".format(kernel_version),
+        "//kernel_device_modules-{}/drivers/power/supply/transsion:tc_charger_class".format(kernel_version),
+        "//kernel_device_modules-{}/drivers/power/supply/transsion:tc_adapter_class".format(kernel_version),
+        "//kernel_device_modules-{}/drivers/power/supply/transsion:tc_misc_intf".format(kernel_version),
+    ],
+)
+
+define_mgk_ddk_ko(
+    name = "tran_cps4021",
+    srcs = [
+        "cps4021.c",
+        "wireless_sha1.c",
+    ],
+    header_deps = [
+       "//kernel_device_modules-{}/drivers/power/supply/transsion:tc_charger_header".format(kernel_version),
+    ],
+    hdrs = glob(["*.h"]),
+    includes = ["."],
+    copts = [
+        "-I$(DEVICE_MODULES_PATH)/drivers/power/supply/transsion",
+    ],
+    ko_deps = [
+        "//kernel_device_modules-{}/drivers/power/supply/transsion/wireless:tran_wireless_manager".format(kernel_version),
+        "//kernel_device_modules-{}/drivers/power/supply/transsion:tc_charger_class".format(kernel_version),
+    ],
+)
+
+define_mgk_ddk_ko(
+    name = "tc_mt5728",
+    srcs = [
+        "tran_mt5728.c",
+        "wireless_sha1.c",
+    ],
+    header_deps = [
+       "//kernel_device_modules-{}/drivers/power/supply/transsion:tc_charger_header".format(kernel_version),
+    ],
+    hdrs = glob(["*.h"]),
+    includes = ["."],
+    copts = [
+        "-I$(DEVICE_MODULES_PATH)/drivers/power/supply/transsion",
+    ],
+    ko_deps = [
+        "//kernel_device_modules-{}/drivers/power/supply/transsion:tc_charger_class".format(kernel_version),
+        "//kernel_device_modules-{}/drivers/power/supply/transsion/wireless:tran_wireless_manager".format(kernel_version),
+    ],
+)

@@ -1,0 +1,12 @@
+#
+# Omnivision TD4160 Touchscreen driver
+#
+config TRAN_TD4160_SPI
+        tristate "CONFIG_TRAN_TD4160_SPI"
+        default n
+        help
+      Say Y here if you have a Omnivision TD4160 touchscreen connected
+      to your system.
+          If unsure, say N.
+          To compile this dirver as a module, choose M here: the
+          module will be called.

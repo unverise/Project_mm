@@ -1,0 +1,19 @@
+#USD:add rain touch code by linsheng.liu 20240625 start
+config TRAN_FOCALTECH_FT3683G_SPI
+        tristate "CONFIG_TRAN_FOCALTECH_FT3683G_SPI"
+        default n
+        help
+          Say Y here if you have ft3683g.
+          If unsure, say N.
+          To compile this dirver as a module, choose M here: the
+          module will be called.
+
+config CTP_FOD_FUNCTION
+        tristate "CONFIG_CTP_FOD_FUNCTION"
+        default n
+        help
+          Say Y here if you have ft3683g.
+          If unsure, say N.
+          To compile this dirver as a module, choose M here: the
+          module will be called.
+#USD:add rain touch code by linsheng.liu 20240625 end

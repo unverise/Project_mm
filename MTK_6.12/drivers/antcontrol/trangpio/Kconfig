@@ -1,0 +1,33 @@
+# SPDX-License-Identifier: GPL-2.0-only
+#
+# TRANGPIO GPIO Control Driver
+#
+#
+# Transsion TRANGPIO driver configuration
+#
+
+config TRAN_TRANGPIO
+    tristate "Transsion TRANGPIO driver"
+    depends on PINCTRL
+    default n
+    help
+      This driver provides a character device interface for controlling
+      GPIOs via pinctrl states. It allows userspace applications to
+      control multiple GPIO pins through a simple read/write interface.
+      
+      The driver supports:
+      - Reading current GPIO states
+      - Setting individual or multiple GPIO states
+      - Device tree configuration for GPIO mappings
+      - Configurable timing parameters
+      
+      To compile this driver as a module, choose M here: the
+      module will be called trangpio.
+      
+      Debug logging can be controlled at runtime via the debug_enabled
+      module parameter without requiring compile-time configuration.
+
+      Say Y here if you want to use TRAN GPIO control functionality.
+      Say M to build it as a module (trangpio.ko).
+
+      If unsure, say N.

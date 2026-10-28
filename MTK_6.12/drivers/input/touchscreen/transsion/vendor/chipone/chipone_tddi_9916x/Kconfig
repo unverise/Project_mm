@@ -1,0 +1,30 @@
+config TOUCHSCREEN_CHIPONE_9916X
+        tristate "CONFIG_TOUCHSCREEN_CHIPONE_9916X"
+        default n
+        help
+          Say Y here if you have line hall.
+          If unsure, say N.
+          To compile this dirver as a module, choose M here: the
+          module will be called.
+
+config TP_VIRTUAL_PROXIMITY
+	bool "Chipone TDDI TP proximity"
+	default n
+        help
+          Say Y here to enable Chipone TDDI TP proximity.
+
+          If unsure, say N.
+
+          To compile this dirver as a module, choose M here: the
+          module will be called
+
+config CTS_CHARGER_STATUS
+        bool "Chipone charger status"
+        default n
+        help
+          Say Y here to enable Chipone charger status battery.
+
+          If unsure, say N.
+
+          To compile this dirver as a module, choose M here: the
+          module will be called

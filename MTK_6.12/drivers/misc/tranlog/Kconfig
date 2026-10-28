@@ -1,0 +1,5 @@
+config TRAN_TRANLOG
+    tristate "transsion logger driver"
+    default m
+    help
+       transsion logger driver

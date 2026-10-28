@@ -1,0 +1,4 @@
+config TRAN_LED_CORE
+        tristate "enable tran led core"
+    help
+        If you need this func, set it to Y.

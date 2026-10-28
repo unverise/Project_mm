@@ -1,0 +1,21 @@
+load("//build/bazel_mgk_rules:mgk_ko.bzl", "define_mgk_ko")
+
+package(
+    default_visibility = [
+        "//visibility:public",
+    ],
+)
+
+
+define_mgk_ko(
+    name = "kill_enhance",
+    srcs = glob([
+        "**/*.c",
+        "**/*.h",
+        "Kbuild",
+        "Makefile",
+    ]),
+    outs = [
+	"kill_enhance.ko",
+    ],
+)

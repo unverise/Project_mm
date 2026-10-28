@@ -1,0 +1,21 @@
+# SPDX-License-Identifier: GPL-2.0-only
+
+#add for trancare by chongyang.zhang 20240429 start
+source "drivers/misc/tranlog/Kconfig"
+#add for trancare by chongyang.zhang 20240429 end
+source "drivers/misc/mediatek/Kconfig"
+
+#SDD:add for tnek.ko by yanbin.zhang 2024/07/18 start
+source "drivers/misc/transsion/Kconfig"
+#SDD:add for tnek.ko by yanbin.zhang 2024/07/18 end
+
+#SPD: add for freeze ADJHBSY-8029 by tianshu.tang 20250102 start
+source "drivers/misc/hiber/Kconfig"
+#SPD: add for freeze ADJHBSY-8029 by tianshu.tang 20250102 end
+
+#USD:get cpu suspend time and 26M off time by jian.zhang7  20250919 start
+source "$(KCONFIG_EXT_PREFIX)drivers/misc/tran_power_ctrl/Kconfig"
+#USD:get cpu suspend time and 26M off time by jian.zhang7  20250919 end
+#BSP: add for X6855 vib bring up by qian.wu3 20260202 start
+source "$(KCONFIG_EXT_PREFIX)drivers/misc/mediatek/richtap_haptic_hv/Kconfig"
+#BSP: add for X6855 vib bring up by qian.wu3 20260202 end

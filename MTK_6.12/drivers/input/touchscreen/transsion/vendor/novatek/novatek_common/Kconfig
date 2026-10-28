@@ -1,0 +1,8 @@
+#USD: add for tp drv by ke.li start
+config TRAN_NOVATEK_COMMON
+    tristate "Transsion novatek_common touch ic"
+    help
+      Say Y here if you have a novatek_common project
+      If unsure, say N.
+
+#USD: add for tp drv by ke.li end

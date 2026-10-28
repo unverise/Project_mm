@@ -1,0 +1,60 @@
+#
+# Chipone ICNL9916X Driver Version V4.0
+#
+load("//build/bazel_mgk_rules:mgk_ddk_ko.bzl", "define_mgk_ddk_ko")
+load("//build/kernel/kleaf:kernel.bzl", "ddk_headers")
+load("@mgk_info//:kernel_version.bzl","kernel_version",)
+
+package(
+    default_visibility = [
+        "//visibility:public",
+    ],
+)
+
+filegroup(
+	name = "srcs",
+	srcs = glob([
+		"**/*.c",
+		"**/Makefile",
+	]),
+)
+define_mgk_ddk_ko(
+    name = "chipone_9916x_v4",
+    srcs = [
+        "chipone_transsion.c",
+        "cts_driver.c",
+        "cts_core.c",
+        "cts_sfctrlv2.c",
+        "cts_spi_flash.c",
+        "cts_firmware.c",
+        "cts_test.c",
+        "cts_charger_detect.c",
+        "cts_earjack_detect.c",
+        "cts_tcs.c",
+        "cts_platform.c",
+        "cts_tool.c",
+        "cts_sysfs.c",
+        "cts_strerror.c",
+        "cts_oem.c",
+    ],
+    hdrs = glob(["**/*.h"]),
+    includes = ["include"],
+    copts = [
+        "-Wall",
+        "-Werror",
+        "-I$(DEVICE_MODULES_PATH)/drivers/input/touchscreen/transsion/core/include/",
+    ],
+    header_deps  = [
+	"//kernel_device_modules-{}/drivers/input/touchscreen/transsion/core:tp_core_header".format(kernel_version),
+    ],
+    ko_deps = [
+	"//kernel_device_modules-{}/drivers/input/touchscreen/transsion/core:adaptive-ts".format(kernel_version),
+    ],
+)
+
+filegroup(
+    name = "ddk_kconfigs",
+    srcs = glob([
+        "**/Kconfig",
+    ]),
+)

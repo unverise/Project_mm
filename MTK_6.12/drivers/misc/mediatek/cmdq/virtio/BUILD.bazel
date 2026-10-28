@@ -1,0 +1,57 @@
+load("//build/bazel_mgk_rules:mgk_ddk_ko.bzl", "define_mgk_ddk_ko")
+load("//build/kernel/kleaf:kernel.bzl", "ddk_headers")
+load("@mgk_info//:kernel_version.bzl", "kernel_version",)
+load("@mgk_info//:dict.bzl", "DEFCONFIG_OVERLAYS",)
+
+package(
+    default_visibility = [
+        "//visibility:public",
+    ],
+)
+
+# add ddk_headers to export headers for other modules to use in the future
+ddk_headers(
+    name = "ddk_public_headers",
+    includes = ["."],
+    hdrs = glob(["**/*.h"]), # export all headers for other modules to use
+)
+
+filegroup(
+    name = "ddk_kconfigs",
+    srcs = glob([
+        "**/Kconfig",
+    ]),
+)
+
+filegroup(
+    name = "ddk_makefile",
+    srcs = glob([
+        "**/Makefile",
+        "**/Kbuild",
+        "**/*.c",
+        "**/*.h",
+    ]),
+)
+
+define_mgk_ddk_ko(
+    name = "virtio-cmdq",
+    srcs = ["virtio-cmdq.c",],
+
+    hdrs = glob([
+        "virtio-ids.h",
+    ]),
+    header_deps = [":ddk_public_headers",
+        "//kernel_device_modules-6.12/drivers/misc/mediatek/cmdq/mailbox:ddk_public_headers",
+    ],
+    copts = [
+        "-I$(DEVICE_MODULES_PATH)/drivers/misc/mediatek/include/",
+        "-I$(DEVICE_MODULES_PATH)/drivers/misc/mediatek/mdp/$(MTK_PLATFORM)/",
+        "-I$(DEVICE_MODULES_PATH)/drivers/misc/mediatek/cmdq/mailbox/",
+        "-I$(DEVICE_MODULES_PATH)/include/uapi/linux/",
+        "-I$(DEVICE_MODULES_PATH)/drivers/iommu/",
+        "-I$(DEVICE_MODULES_PATH)/drivers/misc/mediatek/iommu/",
+        "-I$(DEVICE_MODULES_PATH)/drivers/misc/mediatek/smi/",
+        "-I$(DEVICE_MODULES_PATH)/drivers/iommu/arm/arm-smmu-v3/",
+        "-I$(DEVICE_MODULES_PATH)/drivers/dma-buf/heaps/",
+    ],
+)

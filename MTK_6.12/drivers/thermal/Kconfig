@@ -1,0 +1,14 @@
+# SPDX-License-Identifier: GPL-2.0-only
+#
+# Generic thermal drivers configuration
+#
+
+if THERMAL
+
+menu "Mediatek thermal drivers"
+depends on ARCH_MEDIATEK || COMPILE_TEST
+source "$(KCONFIG_EXT_PREFIX)drivers/thermal/mediatek/Kconfig"
+#USD: add for vtshell by jun.zhou 20251201 start
+source "$(KCONFIG_EXT_PREFIX)drivers/thermal/transsion/Kconfig"
+#USD: add for vtshell by jun.zhou 20251201 end
+endmenu

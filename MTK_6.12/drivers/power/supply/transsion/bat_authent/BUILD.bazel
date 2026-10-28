@@ -1,0 +1,71 @@
+load("//build/bazel_mgk_rules:mgk_ddk_ko.bzl", "define_mgk_ddk_ko")
+load("@mgk_info//:kernel_version.bzl", "kernel_version",)
+
+package(
+    default_visibility = [
+        "//visibility:public",
+    ],
+)
+
+filegroup(
+    name = "ddk_kconfigs",
+    srcs = glob([
+        "**/Kconfig",
+    ]),
+)
+
+filegroup(
+    name = "ddk_src",
+    srcs = glob([
+        "**/Makefile",
+        "**/Kbuild",
+        "**/*.c",
+        "**/*.h",
+    ]),
+)
+
+
+# battery authent module
+define_mgk_ddk_ko(
+     name = "authon",
+     srcs = [
+         "fm1210_ow_gpio.c",
+		 "core/fl_ecc.c",
+		 "core/fl_nn.c",
+		 "core/fl_public.c",
+		 "core/fm1210_ecdsa_api.c",
+		 "core/nn.c",
+		 "core/sha256_core.c",
+		 "core/fl_ecc_ecdsa.c",
+     ],
+    ko_deps = [
+        "//kernel_device_modules-{}/drivers/power/supply/transsion:tc_common_class".format(kernel_version),
+        "//kernel_device_modules-{}/drivers/power/supply/transsion:tc_ta_class".format(kernel_version),
+        "//kernel_device_modules-{}/drivers/power/supply/transsion:tc_algorithm_class".format(kernel_version),
+        "//kernel_device_modules-{}/drivers/power/supply/transsion:tc_charger_class".format(kernel_version),
+        "//kernel_device_modules-{}/drivers/power/supply/transsion:tc_adapter_class".format(kernel_version),
+        "//kernel_device_modules-{}/drivers/power/supply/transsion:tc_misc_intf".format(kernel_version),
+    ],
+	 header_deps = [
+	   "//kernel_device_modules-{}/drivers/power/supply:mtk_charger_header".format(kernel_version),
+     ],
+     hdrs = [
+         "fm1210_ow_gpio.h",
+		 "core/fm1210_ecdsa_api.h",
+		 "core/fl_cryptolib.h",
+		 "core/fl_cryptolib_struct.h",
+		 "core/fl_define.h",
+		 "core/fl_ecc.h",
+		 "core/fl_public.h",
+		 "core/fl_rae_struct.h",
+		 "core/fl_type.h",
+		 "core/nn.h",
+		 "core/sha256_core.h",
+     ],
+     includes = [
+         ".",
+     ],
+    copts = [
+        "-I$(DEVICE_MODULES_PATH)/drivers/power/supply/transsion",
+    ],
+)

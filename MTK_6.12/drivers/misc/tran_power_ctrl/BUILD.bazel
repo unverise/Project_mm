@@ -1,0 +1,53 @@
+load("//build/bazel_mgk_rules:mgk_ddk_ko.bzl", "define_mgk_ddk_ko")
+load("//build/kernel/kleaf:kernel.bzl", "ddk_headers")
+load("@mgk_info//:kernel_version.bzl", "kernel_version")
+
+package(
+    default_visibility = [
+        "//visibility:public",
+    ],
+)
+
+filegroup(
+    name = "ddk_kconfigs",
+    srcs = glob([
+        "**/Kconfig",
+    ]),
+)
+
+ddk_headers(
+    name = "ddk_public_headers",
+    hdrs = [
+        "tran_power_ctrl.h",
+    ],
+    includes = ["."],
+)
+
+define_mgk_ddk_ko(
+    name = "tran_power_ctrl",
+    srcs = [
+        "tran_power_ctrl.c",
+    ],
+    hdrs = glob([
+        "tran_power_ctrl.h",
+        "tran_power_info.h",
+    ]),
+    includes = ["."],
+    copts = [
+        "-I$(DEVICE_MODULES_PATH)/drivers/misc/tran_power_ctrl",
+        "-I$(DEVICE_MODULES_PATH)/include/linux",
+    ],
+    out = "tran_power_ctrl.ko",
+)
+
+ddk_headers(
+   name = "headers",
+   hdrs = [
+        "tran_power_ctrl.h",
+        "tran_power_info.h",
+   ],
+   includes = ["."],
+   linux_includes = [
+       "include",
+   ],
+)

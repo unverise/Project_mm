@@ -1,0 +1,8 @@
+#USD: add for tp drv by yun.luo start
+config TRAN_FT_NOFLASH_COMMON
+    tristate "Transsion focaltech common touch ic"
+    help
+      Say Y here if you have a focaltech common project
+      If unsure, say N.
+
+#USD: add for tp drv by yun.luo end

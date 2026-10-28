@@ -1,0 +1,54 @@
+load("//build/bazel_mgk_rules:mgk_ddk_ko.bzl", "define_mgk_ddk_ko")
+load("//build/kernel/kleaf:kernel.bzl", "ddk_headers")
+load("@mgk_info//:kernel_version.bzl", "kernel_version")
+
+package(
+    default_visibility = [
+        "//visibility:public",
+    ],
+)
+
+define_mgk_ddk_ko(
+    name = "transsion_tranlog",
+    srcs = [
+        "arraylist.c",
+        "athena_config.c",
+        "cloud_engine.c",
+        "tran_kfifo.c",
+        "trancare_config.c",
+        "tranlog.c",
+    ],
+    hdrs = glob([
+        "arraylist.h",
+        "athena.h",
+        "cloud_engine.h",
+        "tran_kfifo.h",
+        "trancare_config.h",
+        "tranlog.h",
+    ]),
+    includes = ["."],
+    copts = [
+        "-I$(srctree)/$(src)",
+        "-I$(DEVICE_MODULES_PATH)/inlcude/linux",
+    ],
+    out = "transsion_tranlog.ko",
+)
+
+ddk_headers(
+   name = "headers",
+   hdrs = [
+        "tranlog.h",
+   ],
+   includes = ["."],
+   linux_includes = [
+       "include",
+   ],
+)
+
+filegroup(
+    name = "srcs",
+    srcs = glob([
+          "**/*.c",
+          "**/*.h",
+    ]),
+)

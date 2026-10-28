@@ -1,0 +1,447 @@
+load("//build/bazel_mgk_rules:mgk_ddk_ko.bzl", "define_mgk_ddk_ko")
+load("//build/kernel/kleaf:kernel.bzl", "ddk_headers")
+load("@mgk_info//:kernel_version.bzl","kernel_version",)
+
+package(
+    default_visibility = [
+        "//visibility:public",
+    ],
+)
+
+filegroup(
+    name = "ddk_kconfigs",
+    srcs = glob([
+        "**/Kconfig",
+    ]),
+)
+
+filegroup(
+    name = "ddk_src",
+    srcs = glob([
+        "**/Makefile",
+        "**/Kbuild",
+        "**/*.c",
+        "**/*.h",
+    ]),
+)
+
+ddk_headers(
+        name = "tc_charger_header",
+        hdrs = glob([
+                "*.h",
+        ]),
+        includes = ["."],
+)
+
+define_mgk_ddk_ko(
+    name = "tc_charger_framework",
+    srcs = [
+        "tc_charger.c",
+        "tc_charger_intf.c",
+        "tc_charger_attr.c",
+        "tc_basic_charger.c",
+        "tc_voter.c",
+        "tc_cloud_control_charger.c",
+    ],
+    header_deps = [
+       "//kernel_device_modules-{}/drivers/power/supply/transsion/wireless:tran_wireless_manager_header".format(kernel_version),
+    ],
+    hdrs = glob(["*.h", "**/*.h"]),
+    includes = ["."],
+    copts = [
+        "-I$(DEVICE_MODULES_PATH)/drivers/power/supply/transsion/wireless",
+        "-I$(DEVICE_MODULES_PATH)/drivers/misc/tranlog",
+    ],
+    ko_deps = [
+        "//kernel_device_modules-{}/drivers/power/supply/transsion:tc_common_class".format(kernel_version),
+        "//kernel_device_modules-{}/drivers/power/supply/transsion:tc_ta_class".format(kernel_version),
+        "//kernel_device_modules-{}/drivers/power/supply/transsion:tc_algorithm_class".format(kernel_version),
+        "//kernel_device_modules-{}/drivers/power/supply/transsion:tc_charger_class".format(kernel_version),
+        "//kernel_device_modules-{}/drivers/power/supply/transsion:tc_adapter_class".format(kernel_version),
+        "//kernel_device_modules-{}/drivers/power/supply/transsion:tc_misc_intf".format(kernel_version),
+        "//kernel_device_modules-{}/drivers/power/supply/transsion:tc_tcpc".format(kernel_version),
+	"//kernel_device_modules-{}/drivers/misc/tranlog:transsion_tranlog".format(kernel_version),
+    ],
+)
+
+
+define_mgk_ddk_ko(
+    name = "tc_pep50",
+    srcs = [
+        "tc_pe5_pps_intf.c",
+        "tc_pe5_rfc_intf.c",
+        "tc_pe5_wireless_intf.c",
+        "tc_pe5_hal.c",
+        "tc_pe5.c",
+        "tc_pe5_qc3_intf.c",
+	],
+    header_deps = [
+       "//kernel_device_modules-{}/drivers/thermal/mediatek:thermal_headers".format(kernel_version),
+       "//kernel_device_modules-{}/drivers/power/supply/transsion:tc_charger_header".format(kernel_version),
+	   "//kernel_device_modules-{}/drivers/power/supply/transsion/wireless:tran_wireless_manager_header".format(kernel_version),
+    ],
+    hdrs = glob(["**/*.h"]),
+    includes = ["."],
+    ko_deps = [
+        "//kernel_device_modules-{}/drivers/power/supply/transsion:tc_common_class".format(kernel_version),
+        "//kernel_device_modules-{}/drivers/power/supply/transsion:tc_ta_class".format(kernel_version),
+        "//kernel_device_modules-{}/drivers/power/supply/transsion:tc_algorithm_class".format(kernel_version),
+        "//kernel_device_modules-{}/drivers/power/supply/transsion:tc_charger_class".format(kernel_version),
+        "//kernel_device_modules-{}/drivers/power/supply/transsion:tc_adapter_class".format(kernel_version),
+        "//kernel_device_modules-{}/drivers/power/supply/transsion:tc_misc_intf".format(kernel_version),
+		":tc_tcpc",
+        ":tc_charger_framework",
+    ],
+)
+
+SIMPLE_TRAN_CHG_ALGO_MODULES = [
+    "tc_pe20",
+    "tc_hvdcp20",
+    "tc_pd",
+    "tc_tc30",
+]
+
+SIMPLE_TRAN_CHG_FEATURE_MODULES = [
+    "tc_adapter_control",
+    "tc_auto_test",
+    "tc_phy_insert_det",
+    "tc_port_burning",
+    "tc_port_corrosion_prevention",
+    "tc_water_detect",
+    "tc_temp_forecast",
+    "tc_pid_chg_algo",
+    "tc_ambient_temp_det",
+    "tran_charge_transfer",
+    "tc_otg_ctrl",
+    "tc_trancare",
+]
+
+SIMPLE_TRAN_CHG_INTERFACE_MODULES = [
+    "tc_battery",
+    "tc_hvdcp30_adapter",
+    "tc_audio",
+    "tc_gauge",
+    "tc_pmic",
+    "tc_lcd_notify",
+    "tc_chg_type_det",
+    "tc_tfcp_ta",
+    "pca_tfcp_ta",
+    "tc_battery_repair_discharge",
+]
+
+TC_SPLIT_TYPE_CHG_MODULES = [
+    "mt6379",
+]
+
+SIMPLE_TC_CHG_MODULES = [
+    "mt6375-charger",
+    "tc_boost_hl7603",
+    "tc_sc760x",
+    "tc_sgm41516d",
+    "tc_sgm41516s",
+    "tc_sc8950",
+    "tc_sc8548_charger",
+    "tc_sc8565",
+    "tc_hl7139a",
+    "tc_rt9471",
+    "mt6720-div2",
+]
+
+SIMPLE_THIRD_FG_MODULES = [
+    "tc_fg_nfg1000",
+    "tc_bq27z561",
+]
+
+define_mgk_ddk_ko(
+    name = "tc_pd_adapter",
+    srcs = [
+        "tc_pd_adapter.c",
+	],
+    header_deps = [
+	   "//kernel_device_modules-{}/drivers/misc/mediatek/typec/tcpc:tcpc_header".format(kernel_version),
+    ],
+    hdrs = glob(["**/*.h"]),
+    includes = ["."],
+    ko_deps = [
+        "//kernel_device_modules-{}/drivers/misc/mediatek/typec/tcpc:tcpc_class".format(kernel_version),
+        "//kernel_device_modules-{}/drivers/power/supply/transsion:tc_common_class".format(kernel_version),
+        "//kernel_device_modules-{}/drivers/power/supply/transsion:tc_ta_class".format(kernel_version),
+        "//kernel_device_modules-{}/drivers/power/supply/transsion:tc_algorithm_class".format(kernel_version),
+        "//kernel_device_modules-{}/drivers/power/supply/transsion:tc_charger_class".format(kernel_version),
+        "//kernel_device_modules-{}/drivers/power/supply/transsion:tc_adapter_class".format(kernel_version),
+        ":tc_tcpc",
+    ],
+)
+define_mgk_ddk_ko(
+    name = "tc_misc_intf",
+    srcs = [
+        "tc_misc_intf.c",
+	],
+    header_deps = [
+	   "//kernel_device_modules-{}/drivers/misc/mediatek/typec/tcpc:tcpc_header".format(kernel_version),
+       "//kernel_device_modules-{}/drivers/thermal/mediatek:thermal_headers".format(kernel_version),
+    ],
+    hdrs = glob(["**/*.h"]),
+    includes = ["."],
+    ko_deps = [
+        "//kernel_device_modules-{}/drivers/misc/mediatek/mtprof:bootprof".format(kernel_version),
+        "//kernel_device_modules-{}/drivers/power/supply/transsion:tc_common_class".format(kernel_version),
+        "//kernel_device_modules-{}/drivers/power/supply/transsion:tc_ta_class".format(kernel_version),
+        "//kernel_device_modules-{}/drivers/power/supply/transsion:tc_algorithm_class".format(kernel_version),
+        "//kernel_device_modules-{}/drivers/power/supply/transsion:tc_charger_class".format(kernel_version),
+        "//kernel_device_modules-{}/drivers/power/supply/transsion:tc_adapter_class".format(kernel_version),
+    ],
+)
+
+
+define_mgk_ddk_ko(
+    name = "tran_usb_ctrl",
+    srcs = [
+        "tran_usb_ctrl.c",
+	],
+    header_deps = [
+	   "//kernel_device_modules-{}/drivers/misc/mediatek/typec/tcpc:tcpc_header".format(kernel_version),
+    ],
+    hdrs = glob(["**/*.h"]),
+    includes = ["."],
+    ko_deps = [
+        "//kernel_device_modules-{}/drivers/misc/mediatek/typec/tcpc:tcpc_class".format(kernel_version),
+        "//kernel_device_modules-{}/drivers/power/supply/transsion:tc_common_class".format(kernel_version),
+        "//kernel_device_modules-{}/drivers/power/supply/transsion:tc_ta_class".format(kernel_version),
+        "//kernel_device_modules-{}/drivers/power/supply/transsion:tc_algorithm_class".format(kernel_version),
+        "//kernel_device_modules-{}/drivers/power/supply/transsion:tc_charger_class".format(kernel_version),
+        "//kernel_device_modules-{}/drivers/power/supply/transsion:tc_adapter_class".format(kernel_version),
+        ":tc_charger_framework",
+        ":tc_misc_intf",
+    ],
+)
+
+define_mgk_ddk_ko(
+    name = "tc_tcpc",
+    srcs = [
+        "tc_tcpc.c",
+	],
+    header_deps = [
+	   "//kernel_device_modules-{}/drivers/misc/mediatek/typec/tcpc:tcpc_header".format(kernel_version),
+    ],
+    hdrs = glob(["**/*.h"]),
+    includes = ["."],
+    ko_deps = [
+        "//kernel_device_modules-{}/drivers/misc/mediatek/typec/tcpc:tcpc_class".format(kernel_version),
+        "//kernel_device_modules-{}/drivers/power/supply/transsion:tc_common_class".format(kernel_version),
+        "//kernel_device_modules-{}/drivers/power/supply/transsion:tc_ta_class".format(kernel_version),
+        "//kernel_device_modules-{}/drivers/power/supply/transsion:tc_algorithm_class".format(kernel_version),
+        "//kernel_device_modules-{}/drivers/power/supply/transsion:tc_charger_class".format(kernel_version),
+        "//kernel_device_modules-{}/drivers/power/supply/transsion:tc_adapter_class".format(kernel_version),
+    ],
+)
+
+[define_mgk_ddk_ko(
+    name = "{}-chg".format(chg),
+    srcs = [
+        "{}-chgdev.c".format(chg),
+        "{}-charger.h".format(chg),
+        "{}-charger.c".format(chg),
+    ],
+    includes = ["."],
+    ko_deps = [
+        "//kernel_device_modules-{}/drivers/power/supply/transsion:tc_common_class".format(kernel_version),
+        "//kernel_device_modules-{}/drivers/power/supply/transsion:tc_ta_class".format(kernel_version),
+        "//kernel_device_modules-{}/drivers/power/supply/transsion:tc_algorithm_class".format(kernel_version),
+        "//kernel_device_modules-{}/drivers/power/supply/transsion:tc_charger_class".format(kernel_version),
+        "//kernel_device_modules-{}/drivers/power/supply/transsion:tc_adapter_class".format(kernel_version),
+        "//kernel_device_modules-{}/drivers/power/supply/transsion:tc_misc_intf".format(kernel_version),
+        "//kernel_device_modules-{}/drivers/power/supply/transsion:tc_charger_framework".format(kernel_version),
+        "//kernel_device_modules-{}/drivers/power/supply/transsion:tc_chg_type_det".format(kernel_version),
+    ],
+    copts = [
+        "-I$(DEVICE_MODULES_PATH)/drivers/misc/mediatek/include",
+        "-I$(DEVICE_MODULES_PATH)/drivers/misc/mediatek/power_throttling",
+        "-I$(DEVICE_MODULES_PATH)/drivers/misc/mediatek/typec/tcpc/inc",
+        "-I$(DEVICE_MODULES_PATH)/drivers/misc/mediatek/usb/usb20/",
+        "-I$(DEVICE_MODULES_PATH)/drivers/power/supply/ufcs",
+    ],
+) for chg in TC_SPLIT_TYPE_CHG_MODULES]
+
+[define_mgk_ddk_ko(
+    name = "{}".format(chg),
+    srcs = [
+        "{}.c".format(chg),
+    ],
+    header_deps = [
+       "//kernel_device_modules-{}/drivers/thermal/mediatek:thermal_headers".format(kernel_version),
+       "//kernel_device_modules-{}/drivers/power/supply/transsion:tc_charger_header".format(kernel_version),
+	   "//kernel_device_modules-{}/drivers/power/supply/transsion/wireless:tran_wireless_manager_header".format(kernel_version),
+    ],
+    includes = ["."],
+    copts = [
+        "-I$(DEVICE_MODULES_PATH)/drivers/misc/mediatek/include",
+        "-I$(DEVICE_MODULES_PATH)/drivers/misc/mediatek/power_throttling",
+        "-I$(DEVICE_MODULES_PATH)/drivers/misc/mediatek/typec/tcpc/inc",
+        "-I$(DEVICE_MODULES_PATH)/drivers/misc/mediatek/usb/usb20/",
+        "-I$(DEVICE_MODULES_PATH)/drivers/power/supply/ufcs",
+    ],
+    ko_deps = [
+        "//kernel_device_modules-{}/drivers/power/supply/transsion:tc_common_class".format(kernel_version),
+        "//kernel_device_modules-{}/drivers/power/supply/transsion:tc_ta_class".format(kernel_version),
+        "//kernel_device_modules-{}/drivers/power/supply/transsion:tc_algorithm_class".format(kernel_version),
+        "//kernel_device_modules-{}/drivers/power/supply/transsion:tc_charger_class".format(kernel_version),
+        "//kernel_device_modules-{}/drivers/power/supply/transsion:tc_adapter_class".format(kernel_version),
+        "//kernel_device_modules-{}/drivers/power/supply/transsion:tc_misc_intf".format(kernel_version),
+        "//kernel_device_modules-{}/drivers/power/supply/transsion:tc_charger_framework".format(kernel_version),
+        "//kernel_device_modules-{}/drivers/power/supply/transsion:tc_chg_type_det".format(kernel_version),
+    ],
+) for chg in SIMPLE_TC_CHG_MODULES]
+
+[define_mgk_ddk_ko(
+    name = "{}".format(intf),
+    srcs = [
+        "{}.c".format(intf),
+    ],
+    header_deps = [
+       "//kernel_device_modules-{}/drivers/thermal/mediatek:thermal_headers".format(kernel_version),
+       "//kernel_device_modules-{}/drivers/power/supply/transsion:tc_charger_header".format(kernel_version),
+	   "//kernel_device_modules-{}/drivers/power/supply/transsion/wireless:tran_wireless_manager_header".format(kernel_version),
+	   "//kernel_device_modules-{}/drivers/misc/mediatek/typec/tcpc:tcpc_header".format(kernel_version),
+	   "//kernel_device_modules-{}/drivers/gpu/drm/mediatek/mediatek_v2:ddk_public_headers".format(kernel_version),
+    ],
+    includes = ["."],
+    copts = [
+        "-I$(DEVICE_MODULES_PATH)/drivers/misc/mediatek/include",
+        "-I$(DEVICE_MODULES_PATH)/drivers/misc/mediatek/power_throttling",
+        "-I$(DEVICE_MODULES_PATH)/drivers/misc/mediatek/typec/tcpc/inc",
+        "-I$(DEVICE_MODULES_PATH)/drivers/misc/mediatek/usb/usb20/",
+        "-I$(DEVICE_MODULES_PATH)/drivers/power/supply/ufcs",
+		"-I$(DEVICE_MODULES_PATH)/drivers/thermal/mediatek",
+		"-I$(DEVICE_MODULES_PATH)/drivers/gpu/drm/mediatek/mediatek_v2/v1",
+    ],
+    ko_deps = [
+        "//kernel_device_modules-{}/drivers/power/supply/transsion:tc_common_class".format(kernel_version),
+        "//kernel_device_modules-{}/drivers/power/supply/transsion:tc_ta_class".format(kernel_version),
+        "//kernel_device_modules-{}/drivers/power/supply/transsion:tc_algorithm_class".format(kernel_version),
+        "//kernel_device_modules-{}/drivers/power/supply/transsion:tc_charger_class".format(kernel_version),
+        "//kernel_device_modules-{}/drivers/power/supply/transsion:tc_adapter_class".format(kernel_version),
+        "//kernel_device_modules-{}/drivers/misc/mediatek/mtprof:bootprof".format(kernel_version),
+        "//kernel_device_modules-{}/drivers/gpu/drm/mediatek/mediatek_v2:mtk_disp_notify".format(kernel_version),
+        ":tc_misc_intf",
+		":tc_tcpc",
+        ":tc_auto_test",
+    ],
+) for intf in SIMPLE_TRAN_CHG_INTERFACE_MODULES]
+
+[define_mgk_ddk_ko(
+    name = "{}".format(fea),
+    srcs = [
+        "{}.c".format(fea),
+    ],
+    header_deps = [
+       "//kernel_device_modules-{}/drivers/misc/mediatek/typec/tcpc:tcpc_header".format(kernel_version),
+       "//kernel_device_modules-{}/drivers/thermal/mediatek:thermal_headers".format(kernel_version),
+       "//kernel_device_modules-{}/drivers/power/supply/transsion:tc_charger_header".format(kernel_version),
+	   "//kernel_device_modules-{}/drivers/power/supply/transsion/wireless:tran_wireless_manager_header".format(kernel_version),
+       "//kernel_device_modules-{}/drivers/misc/tranlog:headers".format(kernel_version),
+    ],
+    includes = ["."],
+    copts = [
+        "-I$(DEVICE_MODULES_PATH)/drivers/misc/mediatek/include",
+        "-I$(DEVICE_MODULES_PATH)/drivers/misc/mediatek/power_throttling",
+        "-I$(DEVICE_MODULES_PATH)/drivers/misc/mediatek/usb/usb20/",
+        "-I$(DEVICE_MODULES_PATH)/drivers/power/supply/ufcs",
+		"-I$(DEVICE_MODULES_PATH)/drivers/gpu/drm/mediatek/mediatek_v2/v1",
+        "-I$(DEVICE_MODULES_PATH)/drivers/misc/tranlog",
+    ],
+    ko_deps = [
+        "//kernel_device_modules-{}/drivers/misc/mediatek/typec/tcpc:tcpc_class".format(kernel_version),
+        "//kernel_device_modules-{}/drivers/power/supply/transsion:tc_common_class".format(kernel_version),
+        "//kernel_device_modules-{}/drivers/power/supply/transsion:tc_ta_class".format(kernel_version),
+        "//kernel_device_modules-{}/drivers/power/supply/transsion:tc_algorithm_class".format(kernel_version),
+        "//kernel_device_modules-{}/drivers/power/supply/transsion:tc_charger_class".format(kernel_version),
+        "//kernel_device_modules-{}/drivers/power/supply/transsion:tc_adapter_class".format(kernel_version),
+        "//kernel_device_modules-{}/drivers/misc/tranlog:transsion_tranlog".format(kernel_version),
+        ":tc_misc_intf",
+        ":tc_charger_framework",
+        ":tc_tcpc",
+    ],
+) for fea in SIMPLE_TRAN_CHG_FEATURE_MODULES]
+
+[define_mgk_ddk_ko(
+    name = "{}".format(fg),
+    srcs = [
+        "{}.c".format(fg),
+    ],
+    header_deps = [
+       "//kernel_device_modules-{}/drivers/thermal/mediatek:thermal_headers".format(kernel_version),
+	   "//kernel_device_modules-{}/drivers/power/supply:mtk_charger_header".format(kernel_version),
+       "//kernel_device_modules-{}/drivers/power/supply/transsion:tc_charger_header".format(kernel_version),
+	   "//kernel_device_modules-{}/drivers/power/supply/transsion/wireless:tran_wireless_manager_header".format(kernel_version),
+    ],
+    includes = ["."],
+    copts = [
+        "-I$(DEVICE_MODULES_PATH)/drivers/misc/mediatek/include",
+        "-I$(DEVICE_MODULES_PATH)/drivers/misc/mediatek/power_throttling",
+        "-I$(DEVICE_MODULES_PATH)/drivers/misc/mediatek/typec/tcpc/inc",
+        "-I$(DEVICE_MODULES_PATH)/drivers/misc/mediatek/usb/usb20/",
+        "-I$(DEVICE_MODULES_PATH)/drivers/power/supply/ufcs",
+    ],
+    ko_deps = [
+        "//kernel_device_modules-{}/drivers/power/supply/transsion:tc_common_class".format(kernel_version),
+        "//kernel_device_modules-{}/drivers/power/supply/transsion:tc_ta_class".format(kernel_version),
+        "//kernel_device_modules-{}/drivers/power/supply/transsion:tc_algorithm_class".format(kernel_version),
+        "//kernel_device_modules-{}/drivers/power/supply/transsion:tc_charger_class".format(kernel_version),
+        "//kernel_device_modules-{}/drivers/power/supply/transsion:tc_adapter_class".format(kernel_version),
+        "//kernel_device_modules-{}/drivers/power/supply/transsion:tc_misc_intf".format(kernel_version),
+    ],
+) for fg in SIMPLE_THIRD_FG_MODULES]
+
+[define_mgk_ddk_ko(
+    name = "{}_algo".format(alg),
+    srcs = [
+        "{}.c".format(alg),
+        "{}_hal.c".format(alg),
+    ],
+    header_deps = [
+       "//kernel_device_modules-{}/drivers/thermal/mediatek:thermal_headers".format(kernel_version),
+       "//kernel_device_modules-{}/drivers/power/supply/transsion:tc_charger_header".format(kernel_version),
+	   "//kernel_device_modules-{}/drivers/power/supply/transsion/wireless:tran_wireless_manager_header".format(kernel_version),
+    ],
+    includes = ["."],
+    copts = [
+        "-I$(DEVICE_MODULES_PATH)/drivers/misc/mediatek/include",
+        "-I$(DEVICE_MODULES_PATH)/drivers/misc/mediatek/power_throttling",
+        "-I$(DEVICE_MODULES_PATH)/drivers/misc/mediatek/typec/tcpc/inc",
+        "-I$(DEVICE_MODULES_PATH)/drivers/misc/mediatek/usb/usb20/",
+        "-I$(DEVICE_MODULES_PATH)/drivers/power/supply/ufcs",
+    ],
+    ko_deps = [
+        "//kernel_device_modules-{}/drivers/power/supply/transsion:tc_common_class".format(kernel_version),
+        "//kernel_device_modules-{}/drivers/power/supply/transsion:tc_ta_class".format(kernel_version),
+        "//kernel_device_modules-{}/drivers/power/supply/transsion:tc_algorithm_class".format(kernel_version),
+        "//kernel_device_modules-{}/drivers/power/supply/transsion:tc_charger_class".format(kernel_version),
+        "//kernel_device_modules-{}/drivers/power/supply/transsion:tc_adapter_class".format(kernel_version),
+        "//kernel_device_modules-{}/drivers/power/supply/transsion:tc_misc_intf".format(kernel_version),
+        ":tc_charger_framework",
+    ],
+) for alg in SIMPLE_TRAN_CHG_ALGO_MODULES]
+
+SIMPLE_TRAN_CHG_CLASS_MODULES = [
+    "tc_common_class",
+    "tc_ta_class",
+    "tc_algorithm_class",
+    "tc_charger_class",
+    "tc_adapter_class",
+]
+
+[define_mgk_ddk_ko(
+    name = "{}".format(cls),
+    srcs = [
+        "{}.c".format(cls),
+        "{}.h".format(cls),
+    ],
+    includes = ["."],
+    copts = [
+        "-I$(DEVICE_MODULES_PATH)/drivers/misc/mediatek/include",
+        "-I$(DEVICE_MODULES_PATH)/drivers/misc/mediatek/power_throttling",
+        "-I$(DEVICE_MODULES_PATH)/drivers/misc/mediatek/typec/tcpc/inc",
+        "-I$(DEVICE_MODULES_PATH)/drivers/misc/mediatek/usb/usb20/",
+    ],
+) for cls in SIMPLE_TRAN_CHG_CLASS_MODULES]

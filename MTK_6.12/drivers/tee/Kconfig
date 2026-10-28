@@ -1,0 +1,31 @@
+# SPDX-License-Identifier: GPL-2.0-only
+# Generic Trusted Execution Environment Configuration
+if TEE
+
+menu "TEE drivers"
+
+config MTK_TEE_GP_SUPPORT
+	bool "Enable MTK GlobalPlatform support in TEE related modules"
+	default n
+	depends on (TRUSTONIC_TEE_SUPPORT) || (MICROTRUST_TEE_SUPPORT)
+	help
+	  GlobalPlatform defines common/consistent APIs and this option
+	  enables TEE related modules to use GPAPIs. (depending on
+	  Trustonic TEE Support or Microtrust TEE Support or Google Trusty
+	  TEE or other 3rd-party TEE)
+
+#USD:add for tos panic by tie.huang 20250614 start
+config TRAN_TOSPANIC_DEBUG_SUPPORT
+	tristate "Enable Transsion tos panic debug"
+	depends on TRAN_TNEK_SUPPORT
+	default m
+	help
+	  tran tos panic debug info.
+#USD:add for tos panic by tie.huang 20250614 end
+
+source "$(KCONFIG_EXT_PREFIX)drivers/tee/teeperf/Kconfig"
+source "$(KCONFIG_EXT_PREFIX)drivers/tee/gud/Kconfig"
+source "$(KCONFIG_EXT_PREFIX)drivers/tee/teei/Kconfig"
+endmenu
+
+endif

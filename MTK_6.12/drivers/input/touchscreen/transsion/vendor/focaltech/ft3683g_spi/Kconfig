@@ -1,0 +1,8 @@
+#USD: add for tp drv by yun.luo start
+config TRAN_FT3683G_SPI
+    tristate "Transsion ft3683g touch ic"
+    help
+      Say Y here if you have a ft3683g project
+      If unsure, say N.
+
+#USD: add for tp drv by yun.luo end

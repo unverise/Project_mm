@@ -1,0 +1,5 @@
+# SPDX-License-Identifier: GPL-2.0
+#
+# Block device driver configuration
+#
+source "drivers/block/zram/Kconfig"

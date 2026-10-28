@@ -1,0 +1,23 @@
+# SPDX-License-Identifier: GPL-2.0
+# ESWAP container backend device configuration
+
+# Selected when system need eswap container
+config ESWAP
+	bool "ESWAP container device support"
+	default n
+	select ESWAP_ZSWAPD
+	help
+	  Say Y here if you want to use the eswap 
+	  as the backend device in ZRAM.
+	  If unsure, say N here.
+	  This module can't be compiled as a module,
+	  the module is as one part of the ZRAM driver.
+
+config ESWAP_ZSWAPD
+        bool "Enable zswapd thread to reclaim anon pages in background"
+        default n
+        help
+          zswapd is a kernel thread that reclaim anonymous pages in the
+          background. When the use of swap pages reaches the watermark
+          and the refault of anonymous pages is high, the content of
+          zram will exchanged to eswap by a certain percentage.

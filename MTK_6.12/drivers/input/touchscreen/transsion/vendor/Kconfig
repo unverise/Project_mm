@@ -1,0 +1,3 @@
+#USD: add for tp by hai.tang5 20260128 start
+source "$(KCONFIG_EXT_PREFIX)drivers/input/touchscreen/transsion/vendor/goodix/Kconfig"
+#USD: add for tp by hai.tang5 20260128 end

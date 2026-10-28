@@ -1,0 +1,46 @@
+load("//build/bazel_mgk_rules:mgk_ddk_ko.bzl", "define_mgk_ddk_ko")
+load("//build/kernel/kleaf:kernel.bzl", "ddk_headers")
+load("@mgk_info//:kernel_version.bzl", "kernel_version",)
+
+package(default_visibility = ["//visibility:public"])
+
+define_mgk_ddk_ko(
+    name = "tran_expand_key",
+    srcs = [
+        "tran_expand_key.c",
+    ],
+    includes = ["."],
+    copts = [
+        "-I$(srctree)/drivers/input/keyboard/tran_key",
+        "-I$(DEVICE_MODULES_PATH)/drivers/misc/mediatek/include/",
+    ],
+    ko_deps = [
+        "//kernel_device_modules-{}/drivers/misc/mediatek/monitor_hang:monitor_hang".format(kernel_version),
+    ],
+    out = "tran_expand_key.ko",
+)
+
+ddk_headers(
+   name = "headers",
+   hdrs = glob(["**/*.h"]),
+   includes = ["."],
+   linux_includes = [
+       "include",
+   ],
+)
+
+filegroup(
+    name = "srcs",
+    srcs = glob([
+        "**/Makefile",
+        "**/*.c",
+        "**/*.h",
+        ]),
+)
+
+filegroup(
+    name = "ddk_kconfigs",
+    srcs = glob([
+        "**/Kconfig",
+        ]),
+)

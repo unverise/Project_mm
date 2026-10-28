@@ -1,0 +1,52 @@
+load("//build/bazel_mgk_rules:mgk_ddk_ko.bzl", "define_mgk_ddk_ko")
+load("//build/kernel/kleaf:kernel.bzl", "ddk_headers")
+load("@mgk_info//:kernel_version.bzl","kernel_version",)
+
+package(
+    default_visibility = [
+        "//visibility:public",
+    ],
+)
+
+filegroup(
+	name = "srcs",
+	srcs = glob([
+		"**/*.c",
+	]),
+)
+define_mgk_ddk_ko(
+    name = "gt9916_common",
+    srcs = [
+		"goodix_brl_i2c.c",
+        "goodix_brl_spi.c",
+        "goodix_ts_core.c",
+		"goodix_brl_hw.c",
+		"goodix_cfg_bin.c",
+		"goodix_ts_utils.c",
+		"goodix_brl_fwupdate.c",
+		"goodix_ts_gesture.c",
+		"goodix_ts_inspect.c",
+		"goodix_ts_tools.c",
+    ],
+    hdrs = glob(["**/*.h"]),
+    includes = ["include"],
+    copts = [
+        "-Wall",
+        "-Wno-unused-variable",
+        "-Wno-unused-but-set-variable",
+        "-I$(DEVICE_MODULES_PATH)/drivers/input/touchscreen/transsion/core/include/",
+    ],
+    header_deps  = [
+	"//kernel_device_modules-{}/drivers/input/touchscreen/transsion/core:tp_core_header".format(kernel_version),
+    ],
+    ko_deps = [
+	"//kernel_device_modules-{}/drivers/input/touchscreen/transsion/core:adaptive-ts".format(kernel_version),
+    ],
+)
+
+filegroup(
+    name = "ddk_kconfigs",
+    srcs = glob([
+        "**/Kconfig",
+    ]),
+)

@@ -1,0 +1,69 @@
+load("//build/bazel_mgk_rules:mgk_ddk_ko.bzl", "define_mgk_ddk_ko")
+load("@mgk_info//:kernel_version.bzl", "kernel_version")
+load("//build/kernel/kleaf:kernel.bzl", "ddk_headers")
+load("@mgk_info//:dict.bzl", "DEFCONFIG_OVERLAYS",)
+
+package(
+    default_visibility = [
+        "//visibility:public",
+    ],
+)
+
+ddk_headers(
+    name = "ddk_public_headers",
+    includes = ["."],
+    hdrs = glob(["**/*.h"]), # export all headers for other modules to use
+)
+
+filegroup(
+    name = "ddk_kconfigs",
+    srcs = glob([
+        "**/Kconfig",
+    ]),
+)
+
+filegroup(
+    name = "srcs",
+    srcs = glob([
+        "**/Makefile",
+        "**/Kconfig",
+        "**/*.c",
+        "**/*.h",
+    ]),
+)
+
+define_mgk_ddk_ko(
+    name = "virtio-adsp",
+    conditional_srcs = {
+        "CONFIG_MTK_VIRT_ADSP": {
+            True: [
+                "virtio-adsp.c",
+            ],
+        },
+    },
+    includes = ["."],
+    copts = [
+        "-I$(DEVICE_MODULES_PATH)/sound/soc/mediatek/audio_dsp",
+        "-I$(DEVICE_MODULES_PATH)/drivers/misc/mediatek/cmdq/mailbox",
+        "-I$(DEVICE_MODULES_PATH)/drivers/misc/mediatek/audio_ipi/include",
+        "-I$(DEVICE_MODULES_PATH)/drivers/misc/mediatek/adsp/include",
+        "-I$(DEVICE_MODULES_PATH)/drivers/misc/mediatek/base/power/include",
+        "-I$(DEVICE_MODULES_PATH)/drivers/misc/mediatek/include/mt-plat",
+        "-I$(DEVICE_MODULES_PATH)/drivers/misc/mediatek/include",
+        "-I$(DEVICE_MODULES_PATH)/drivers/misc/mediatek/pbm",
+        "-I$(DEVICE_MODULES_PATH)/drivers/misc/mediatek/slbc/",
+        "-Werror",
+    ],
+    header_deps = [
+        "//kernel_device_modules-{}/sound/virtio:ddk_public_headers".format(kernel_version),
+        "//kernel_device_modules-{}/sound/soc/mediatek/common:ddk_public_headers".format(kernel_version),
+        "//kernel_device_modules-{}/drivers/misc/mediatek/audio_ipi:ddk_public_headers".format(kernel_version),
+        "//kernel_device_modules-{}/sound/soc/mediatek/mt6881:ddk_public_headers".format(kernel_version),
+    ],
+    ko_deps = [
+        "//kernel_device_modules-{}/drivers/misc/mediatek/aee/aed:aee_aed".format(kernel_version),
+        "//kernel_device_modules-{}/drivers/misc/mediatek/adsp:adsp".format(kernel_version),
+        "//kernel_device_modules-{}/drivers/misc/mediatek/audio_ipi:audio_ipi".format(kernel_version),
+        "//kernel_device_modules-{}/sound/soc/mediatek/audio_dsp:snd-soc-audiodsp-common".format(kernel_version),
+    ],
+)

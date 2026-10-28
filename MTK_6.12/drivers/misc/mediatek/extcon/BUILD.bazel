@@ -1,0 +1,74 @@
+load("//build/bazel_mgk_rules:mgk_ddk_ko.bzl", "define_mgk_ddk_ko")
+load("@mgk_info//:kernel_version.bzl", "kernel_version",)
+
+package(
+
+    default_visibility = [
+        "//visibility:public",
+    ],
+)
+
+filegroup(
+    name = "ddk_kconfigs",
+    srcs = glob([
+        "**/Kconfig",
+    ]),
+)
+
+filegroup(
+    name = "ddk_srcs",
+    srcs = glob([
+          "**/*.c",
+          "**/*.h",
+    ]),
+)
+
+#USD:add sunmao by zhegnquan.qin 20250402 start
+define_mgk_ddk_ko(
+    name = "extcon-mtk-usb",
+    srcs = [
+        "extcon-mtk-usb.c",
+    ],
+    ko_deps = [
+        "//kernel_device_modules-{}/drivers/misc/mediatek/typec/tcpc:tcpc_class".format(kernel_version),
+        "//kernel_device_modules-{}/drivers/power/supply/transsion:tc_misc_intf".format(kernel_version),
+    ],
+    header_deps = [
+       "//kernel_device_modules-{}/drivers/power/supply/transsion:tc_charger_header".format(kernel_version),
+    ],
+    hdrs = glob(["**/*.h"]),
+    includes = ["."],
+    conditional_srcs = {
+    },
+    out = "extcon-mtk-usb.ko",
+    copts = [
+        "-I$(DEVICE_MODULES_PATH)/drivers/misc/mediatek/typec/tcpc/inc",
+    ],
+)
+#USD:add sunmao by zhegnquan.qin 20250402 end
+
+#USD:add sunmao by zhegnquan.qin 20250402 start
+define_mgk_ddk_ko(
+    name = "tran_extcon_usb",
+    srcs = [
+        "tran_extcon_usb.c",
+    ],
+    ko_deps = [
+        "//kernel_device_modules-{}/drivers/misc/mediatek/typec/tcpc:tcpc_class".format(kernel_version),
+        "//kernel_device_modules-{}/drivers/power/supply/transsion:tc_misc_intf".format(kernel_version),
+		"//kernel_device_modules-{}/drivers/power/supply/transsion:tc_common_class".format(kernel_version),
+		"//kernel_device_modules-{}/drivers/power/supply/transsion:tc_tcpc".format(kernel_version),
+    ],
+    header_deps = [
+       "//kernel_device_modules-{}/drivers/power/supply/transsion:tc_charger_header".format(kernel_version),
+    ],
+    hdrs = glob(["**/*.h"]),
+    includes = ["."],
+    conditional_srcs = {
+    },
+    out = "tran_extcon_usb.ko",
+    copts = [
+        "-I$(DEVICE_MODULES_PATH)/drivers/misc/mediatek/typec/tcpc/inc",
+    ],
+)
+#USD:add sunmao by zhegnquan.qin 20250402 end

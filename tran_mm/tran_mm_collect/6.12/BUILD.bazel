@@ -1,0 +1,68 @@
+load("//build/bazel_mgk_rules:mgk_ddk_ko.bzl", "define_mgk_ddk_ko")
+load("//build/kernel/kleaf:kernel.bzl", "ddk_headers")
+load("@mgk_info//:kernel_version.bzl", "kernel_version",)
+
+package(
+    default_visibility = [
+        "//visibility:public",
+    ],
+)
+
+ddk_headers(
+    name = "tran_mm_headers",
+    hdrs = [
+        "tranmem_task_struct.h",
+	],
+    includes = ["."],
+    linux_includes = [
+        "include",
+    ],
+)
+
+define_mgk_ddk_ko(
+    name = "tran_mm_collect",
+    srcs = [
+        "tranmem_cloud.c",
+        "tranmem_init.c",
+        "tranmem_task_struct.c",
+        "tranmem_emem.c",
+        "tranmem_psi.c",
+        "tranmem_direct_reclaim.c",
+    ],
+    hdrs = glob([
+        "tranmem_cloud.h",
+        "tranmem_task_struct.h",
+        "tranmem_emem.h",
+        "tranmem_event.h",
+        "tranmem_psi.h",
+        "tranmem_direct_reclaim.h",
+    ]),
+    includes = ["."],
+    linux_includes = [
+        "mm",
+    ],
+    ko_deps = [
+        "//vendor/transsion/kernel_modules/tran_mm/tran_zram/6.12/zram:tran_zram",
+        "//kernel_device_modules-{}/drivers/misc/transsion/tnek:tnek".format(kernel_version),
+        "//kernel_device_modules-{}/drivers/misc/tranlog:transsion_tranlog".format(kernel_version),
+        "//kernel_device_modules-{}/drivers/dma-buf/heaps:mtk_heap_debug".format(kernel_version),
+    ],
+    header_deps = [
+        "//vendor/transsion/kernel_modules/tran_mm/tran_zram/6.12/zram:headers",
+        "//kernel_device_modules-{}/drivers/misc/tranlog:headers".format(kernel_version),
+        "//kernel_device_modules-{}/drivers/misc/transsion/tnek:headers".format(kernel_version),
+    ],
+    copts = [
+        "-I$(srctree)/include",
+        "-I$(srctree)/include/linux",
+        "-I$(DEVICE_MODULES_PATH)/../kernel-6.12",
+        "-I$(srctree)/mm",
+        "-I$(srctree)",
+        "-I$(srctree)/$(src)",
+        "-I$(srctree)/../vendor/transsion/kernel_modules/tran_mm/tran_zram/6.12/zram",
+        "-I$(DEVICE_MODULES_PATH)/drivers/misc/tranlog",
+        "-I$(DEVICE_MODULES_PATH)/drivers/misc/transsion/tnek",
+        "-I$(srctree)/../kernel-6.12/kernel",
+    ],
+    out = "tran_mm_collect.ko",
+)

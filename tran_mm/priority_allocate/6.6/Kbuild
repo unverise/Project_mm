@@ -1,0 +1,23 @@
+KERNEL_INCLUDE = $(srctree)/include/linux
+
+ccflags-y += \
+        -I$(srctree)/include/ \
+        -I$(srctree)/include/linux/ \
+        -I$(srctree)/mm/ \
+        -I$(srctree)/ \
+        -I$(srctree)/$(src)/ \
+        -I$(srctree)/../kernel_device_modules-6.1/drivers/misc/mediatek/sched/ \
+	-I$(DEVICE_MODULES_PATH)/drivers/misc/mediatek/sched/trans_sched \
+	-I$(srctree)/../vendor/transsion/kernel_modules/uas/include/ \
+        -I$(srctree)/../kernel-6.1/kernel/
+
+subdir-ccflags-y += \
+        -I$(srctree)/include/ \
+        -I$(srctree)/include/linux/ \
+        -I$(srctree)/mm/ \
+        -I$(srctree)/
+
+obj-m += priority_allocate.o
+
+priority_allocate-y += priority_allocates.o
+priority_allocate-y += task_priority.o

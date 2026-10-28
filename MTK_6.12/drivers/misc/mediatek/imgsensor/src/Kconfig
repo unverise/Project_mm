@@ -1,0 +1,167 @@
+config SPECIFY_IMGSENSOR
+	bool "Specify image sensor name"
+	depends on MTK_IMGSENSOR
+	help
+	  Specify name of each sensor to prevent obtaining wrong sensor driver
+	  with same sensor ID. For example, imx258_mipi_raw and
+	  imx258_mipi_mono are of same sensor ID. If not specifying sensor,
+	  imx258_mipi_mono may be recognized as imx258_mipi_raw.
+
+config IMGSENSOR_MAIN
+	string "Custom main image sensor"
+	depends on SPECIFY_IMGSENSOR
+	help
+	  Specify name of main sensor to prevent obtaining wrong sensor driver
+	  with same sensor ID. For example, imx258_mipi_raw and
+	  imx258_mipi_mono are of same sensor ID. If not specifying sensor,
+	  imx258_mipi_mono may be recognized as imx258_mipi_raw.
+
+config IMGSENSOR_MAIN2
+	string "Custom main2 image sensor"
+	depends on SPECIFY_IMGSENSOR
+	help
+	  Specify name of main2 sensor to prevent obtaining wrong sensor driver
+	  with same sensor ID. For example, imx258_mipi_raw and
+	  imx258_mipi_mono are of same sensor ID. If not specifying sensor,
+	  imx258_mipi_mono may be recognized as imx258_mipi_raw.
+
+config IMGSENSOR_SUB
+	string "Custom sub image sensor"
+	depends on SPECIFY_IMGSENSOR
+	help
+	  Specify name of sub sensor to prevent obtaining wrong sensor driver
+	  with same sensor ID. For example, imx258_mipi_raw and
+	  imx258_mipi_mono are of same sensor ID. If not specifying sensor,
+	  imx258_mipi_mono may be recognized as imx258_mipi_raw.
+
+config IMGSENSOR_SUB2
+	string "Custom sub2 image sensor"
+	depends on SPECIFY_IMGSENSOR
+	help
+	  Specify name of sub2 sensor to prevent obtaining wrong sensor driver
+	  with same sensor ID. For example, imx258_mipi_raw and
+	  imx258_mipi_mono are of same sensor ID. If not specifying sensor,
+	  imx258_mipi_mono may be recognized as imx258_mipi_raw.
+
+config IMGSENSOR_MAIN3
+	string "Custom main3 image sensor"
+	depends on SPECIFY_IMGSENSOR
+	help
+	  Specify name of main3 sensor to prevent obtaining wrong sensor driver
+	  with same sensor ID. For example, imx258_mipi_raw and
+	  imx258_mipi_mono are of same sensor ID. If not specifying sensor,
+	  imx258_mipi_mono may be recognized as imx258_mipi_raw.
+
+#ITD:modify by camera driver team start
+config TRAN_CAMERA_EXT_LDO_REGULATOR
+    bool "camera use ext ldo"
+    default n
+    help
+      camera use ext ldo, no isp, no hal
+
+config TRAN_CAM_BUCK_FOR_VS2
+    bool "camera use vs2 pmu"
+    default n
+    help
+      camera use vs2 pmu, no isp, no hal
+
+config TRAN_LCM_4CH_LDO
+        bool "camera use lcm 4ch ldo"
+        default n
+        help
+          camera use lcm 4ch ldo, no isp, no hal
+
+config TRAN_CAMERA_FAKE_STEREO_MAIN2
+    bool "use fake stereo main2"
+    default n
+    help
+    use fake stereo main2, no isp, no hal
+
+config TRAN_CAMERA_FAKE_STEREO_SUB2
+    bool "use fake stereo sub2"
+    default n
+    help
+    use fake stereo sub2, no isp, no hal
+
+config TRAN_CAMERA_FAKE_STEREO_MAIN3
+    bool "use fake stereo main3"
+    default n
+    help
+    use fake stereo main3, no isp, no hal
+
+config TRAN_CAMERA_FAKE_STEREO_MAIN4
+    bool "use fake stereo main4"
+    default n
+    help
+    use fake stereo main4, no isp, no hal
+
+config TRAN_CAMERA_FAKE_STEREO_SAME_CLK_WITH_MAIN
+    bool "fake stereo sensor. same clk with main sensor"
+    default n
+    help
+    if fake stereo sensor have same clk with main sensor, must skip clk enable
+
+config TRAN_CAMERA_FAKE_STEREO_SAME_CLK_WITH_MAIN_SEC
+    bool "fake stereo sec sensor. same clk with main sensor"
+    default n
+    help
+    if fake stereo sec sensor have same clk with main sensor, must skip clk enable
+
+config TRAN_CAMERA_FAKE_STEREO_SAME_AVDD_WITH_MAIN
+        bool "fake stereo sensor. same avdd with main sensor"
+        default n
+        help
+          if fake stereo sensor have same avdd with main sensor, must skip avdd enable
+
+config MTK_CAM_MAX_NUMBER_OF_CAMERA
+        int "max number of camera supported"
+        default 2
+        help
+          max number of camera supported
+
+config CONFIG_TRAN_CAMERA_BIND_SN
+		bool "read camera sn number"
+        default n
+        help
+          read camera sn number
+config CUSTOM_TRAN_DRIVER_GC8034_27FPS
+        bool "gc8034 driver 27fps flag"
+        default n
+        help
+          use CUSTOM_TRAN_DRIVER_GC8034_27FPS
+
+#add by fei.wu5 for 4LDO compatible 20240717 start
+config REGULATOR_TRAN_4CH_LDO_SGM38121_SUPPORT
+    bool "camera use sgm38121 4ldo"
+    default n
+    help
+      camera use sgm38121 4ldo
+#add by fei.wu5 for 4LDO compatible 20240717 end
+
+config TRAN_CAMERA_REGULATOR_SUPPORT
+    bool "camera pin is configured as regulator"
+ 	default n
+ 	help
+ 	  camera pin is configured as regulator, no isp, no hal
+
+config CUSTOM_TRAN_PROJECT
+    string "CUSTOM_TRAN_PROJECT"
+ 	help
+ 	   Kernel space PROJECT version.
+
+#ITD: Modify sensor control parallel By yingfei.li 240227 start
+config TRAN_CAM_SENSOR_PARALLELISM
+        bool "sensor control parallelism"
+        default n
+        help
+            if enable, Sensor control can be parallel
+#ITD: Modify sensor control parallel By yingfei.li 240227 end
+#ITD:modify by camera driver team end
+
+#ITD: Add Imgsensor Info By hongtao.xie 20250219 start
+config TRAN_IMGSENSOR_HAVE_SUB2
+		bool "match sub2 device name"
+        default n
+        help
+          match sub2 device name
+#ITD: Add Imgsensor Info By hongtao.xie 20250219 start

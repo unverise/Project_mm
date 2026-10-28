@@ -1,0 +1,7 @@
+config TRAN_CUSTOM_KEY_EXPAND
+  tristate "For tran sw key expand function"
+  help
+    Select for tran_sw key expand function.
+    Set Y or M to select this feature for the item,
+    and set N to disable.
+

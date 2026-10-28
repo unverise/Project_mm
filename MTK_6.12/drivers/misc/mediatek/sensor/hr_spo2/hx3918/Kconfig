@@ -1,0 +1,13 @@
+#USD: add for hx3918 drv by longtao.ran 20241008 start
+config TRAN_HX3918
+    tristate "CONFIG_TRAN_HX3918"
+    default n
+    help
+       transsion logger driver
+
+config TRAN_HX3918_G_SENSOR
+    tristate "CONFIG_TRAN_HX3918_G_SENSOR"
+    default n
+    help
+       transsion g-sensor data function
+#USD: add for hx3918 drv by longtao.ran 20241008 end

@@ -1,0 +1,23 @@
+load("//build/bazel_mgk_rules:mgk_ddk_ko.bzl", "define_mgk_ddk_ko")
+load("//build/kernel/kleaf:kernel.bzl", "ddk_headers")
+load("@mgk_info//:kernel_version.bzl", "kernel_version",)
+
+package(default_visibility = ["//visibility:public"])
+ddk_headers(
+    name = "trancam_elapsedtime_headers",
+    hdrs = ["trancam_driver_elapsedtime.h"],
+    includes = ["."],
+    visibility = ["//visibility:public"],
+)
+
+define_mgk_ddk_ko(
+    name = "trancam_driver_elapsedtime",
+    srcs = [
+		"trancam_driver_elapsedtime.h",
+        "trancam_driver_elapsedtime.c",
+    ],
+    includes = ["."],
+    copts = [
+        "-I$(srctree)/drivers/misc/mediatek/trancam_driver_elapsedtime",
+    ],
+)

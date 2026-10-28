@@ -1,0 +1,33 @@
+# SPDX-License-Identifier: GPL-2.0
+# USD:add MemFusion2.2 for XLBYYHBWQ-3103 by dongyun.liu at 20240910 start
+config TRAN_MEMORY_FUSION2_2_SUPPORT
+        bool "Memfusion V2.2 LRU write back page to backing device"
+        depends on ZRAM
+        select ZRAM_WRITEBACK
+        select ESWAP
+        select TRAN_MEMCG_COMPRESS_SUPPORT
+        default y
+        help
+          This feature supports zram lru-based writeback (SQZR).
+# USD:add MemFusion2.2 for XLBYYHBWQ-3103 by dongyun.liu at 20240910 end
+
+# Selected when system need eswap container
+config ESWAP
+	bool "ESWAP container device support"
+	default n
+	select TRAN_MEMCG_COMPRESS_SUPPORT
+	help
+	  Say Y here if you want to use the eswap
+	  as the backend device in ZRAM.
+	  If unsure, say N here.
+	  This module can't be compiled as a module,
+	  the module is as one part of the ZRAM driver.
+
+config TRAN_MEMCG_COMPRESS_SUPPORT
+        bool "Enable memfusiond thread to reclaim anon pages in background"
+        default n
+        help
+          memfusiond is a kernel thread that reclaim anonymous pages in the
+          background. When the use of swap pages reaches the watermark
+          and the refault of anonymous pages is high, the content of
+          zram will exchanged to flash by a certain percentage.

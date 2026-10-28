@@ -1,0 +1,44 @@
+load("//build/bazel_mgk_rules:mgk_ddk_ko.bzl", "define_mgk_ddk_ko")
+load("@mgk_info//:kernel_version.bzl", "kernel_version",)
+
+package(
+    default_visibility = [
+        "//visibility:public",
+    ],
+)
+
+filegroup(
+    name = "ddk_kconfigs",
+    srcs = glob([
+        "**/Kconfig",
+    ]),
+)
+
+filegroup(
+    name = "ddk_src",
+    srcs = glob([
+        "**/Makefile",
+        "**/Kbuild",
+        "**/*.c",
+        "**/*.h",
+    ]),
+)
+
+ # tran_leds_hk32f0301 LED driver module
+define_mgk_ddk_ko(
+    name = "tran-leds-hk32f0301",
+    srcs = [
+        "leds-hk32f0301.c",
+    ],
+	hdrs = [
+		"hk320f0301_mtp_array.h",
+		"leds-hk32f0301.h",
+	],
+    includes = [
+	    ".",
+	],
+    ko_deps = [
+        "//kernel_device_modules-{}/drivers/leds/tran_led/core:tran-led-core".format(kernel_version),
+    ],
+
+)

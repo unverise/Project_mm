@@ -1,0 +1,33 @@
+#ITD:modify by camera driver team 20250531 start
+load("//build/bazel_mgk_rules:mgk_ddk_ko.bzl", "define_mgk_ddk_ko")
+load("@mgk_info//:kernel_version.bzl", "kernel_version",)
+
+package(
+    default_visibility = [
+        "//visibility:public",
+    ],
+)
+
+define_mgk_ddk_ko(
+    name = "main3af",
+    srcs = glob([
+          "**/*.c",
+          "**/*.h",
+    ]),
+    includes = [
+        ".",
+    ],
+    header_deps = [
+        "//kernel_device_modules-{}/drivers/misc/mediatek/trancam_driver_elapsedtime:trancam_elapsedtime_headers".format(kernel_version),
+    ],
+
+    ko_deps = [
+        "//kernel_device_modules-{}/drivers/misc/mediatek/trancam_driver_elapsedtime:trancam_driver_elapsedtime".format(kernel_version),
+    ],
+    copts = [
+        "-I$(DEVICE_MODULES_PATH)/drivers/misc/mediatek/lens/vcm/proprietary/main3/inc",
+        "-I$(DEVICE_MODULES_PATH)/drivers/misc/mediatek/lens/vcm/proprietary/tran_commonaf",
+    ],
+    out = "main3af.ko",
+)
+#ITD:modify by camera driver team 20250531 end

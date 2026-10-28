@@ -1,0 +1,9 @@
+config TRAN_OPS_MEDIATOR
+    tristate "TRANSSION TP Notifier driver"
+    help
+      This driver is the bridge between TP and LCD, LCD can get TP mode from This
+      driver,LCD also get notify TP to go to sleep or resume.
+config TRAN_FTS_PATCH_COMERR_PM
+    bool "TRANSSION Focal tp add pm patch"
+    help
+      For communication err in deep sleep.

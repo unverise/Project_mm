@@ -1,0 +1,55 @@
+load("//build/bazel_mgk_rules:mgk_ddk_ko.bzl", "define_mgk_ddk_ko")
+load("@mgk_info//:kernel_version.bzl", "kernel_version")
+
+package(
+    default_visibility = [
+        "//visibility:public",
+    ],
+)
+
+filegroup(
+    name = "ddk_kconfigs",
+    srcs = glob([
+        "**/Kconfig",
+    ]),
+)
+
+filegroup(
+    name = "ddk_src",
+    srcs = glob([
+        "**/Makefile",
+        "**/Kbuild",
+        "**/*.c",
+        "**/*.h",
+    ]),
+)
+
+define_mgk_ddk_ko(
+    name = "tran_hx3918",
+    srcs = [
+        "hx3918.c",
+        "hx3918_factory_test.c",
+        "hx3918_hrs_agc.c",
+        "hx3918_spo2_agc.c",
+        "tyhx_hrs_alg.c",
+        "tyhx_linux_hx3918.c",
+        "tyhx_spo2_alg.c",
+    ],
+    hdrs = [
+        "hx3918.h",
+        "hx3918_factory_test.h",
+        "hx3918_hrs_agc.h",
+        "hx3918_spo2_agc.h",
+        "tyhx_hrs_alg.h",
+        "tyhx_hrs_alg_para.h",
+        "tyhx_spo2_alg.h",
+        "tyhx_spo2_alg_para.h",
+    ],
+    ko_deps = [
+        "//kernel_device_modules-{}/drivers/misc/mediatek/sensor/hr_spo2/tran_hr_spo2:tran_hr_spo2".format(kernel_version),
+        "//kernel_device_modules-{}/drivers/misc/mediatek/sensor/2.0/core:hf_manager".format(kernel_version),
+    ],
+    includes = [
+        ".",
+    ],
+)

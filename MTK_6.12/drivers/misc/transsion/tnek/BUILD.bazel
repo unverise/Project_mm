@@ -1,0 +1,48 @@
+load("//build/bazel_mgk_rules:mgk_ddk_ko.bzl", "define_mgk_ddk_ko")
+load("//build/kernel/kleaf:kernel.bzl", "ddk_headers")
+load("@mgk_info//:kernel_version.bzl", "kernel_version")
+
+package(
+    default_visibility = [
+        "//visibility:public",
+    ],
+)
+
+define_mgk_ddk_ko(
+    name = "tnek",
+    srcs = [
+        "tnek_api.c",
+        "tnek_main.c",
+    ],
+    hdrs = glob([
+        "tnek.h",
+    ]),
+    includes = ["."],
+    copts = [
+        "-I$(srctree)/$(src)",
+        "-I$(DEVICE_MODULES_PATH)/inlcude/linux",
+        "-I$(DEVICE_MODULES_PATH)/drivers/misc/transsion/include",
+    ],
+    out = "tnek.ko",
+)
+
+ddk_headers(
+   name = "headers",
+   hdrs = [
+        "tnek.h",
+   ],
+   includes = ["."],
+   linux_includes = [
+       "include",
+   ],
+)
+
+filegroup(
+    name = "srcs",
+    srcs = glob([
+          "**/Makefile",
+          "**/Kbuild",
+          "**/*.c",
+          "**/*.h",
+    ]),
+)
